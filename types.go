@@ -50,7 +50,7 @@ func (items PostList) WithStatus(status PostStatus) PostList {
 
 var posts = PostList{
 	{
-		UUID:        uuid.New(),
+		UUID:        uuid.MustParse("8e24c252-b5d4-4d06-b42d-1eb392bd5b1a"),
 		Title:       "Very new post",
 		Slug:        "very-new-post",
 		Status:      PostStatusDraft,
@@ -69,7 +69,7 @@ var posts = PostList{
 `,
 	},
 	{
-		UUID:        uuid.New(),
+		UUID:        uuid.MustParse("44824343-8c97-4ea3-aa01-de842a4ac5cd"),
 		Title:       "Yet another post",
 		Slug:        "yet-another-post",
 		Status:      PostStatusPublished,
@@ -88,7 +88,7 @@ var posts = PostList{
 `,
 	},
 	{
-		UUID:        uuid.New(),
+		UUID:        uuid.MustParse("67ff7045-a1ab-4ebd-8195-043194c12d69"),
 		Title:       "Hello future",
 		Slug:        "hello-future",
 		Status:      PostStatusPublished,

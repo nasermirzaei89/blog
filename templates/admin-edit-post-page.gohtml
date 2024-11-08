@@ -14,7 +14,7 @@
     {{template "header-admin" .}}
     <main class="container mx-auto">
         <section class="flex flex-col p-4 gap-4">
-                <h1>Edit Post</h1>
+            <h1>Edit Post</h1>
             <form method="post" class="flex flex-col gap-2">
                 <div class="flex flex-col items-start">
                     <label for="title">Title</label>
@@ -28,18 +28,21 @@
                     <div class="label">Status</div>
                     <div class="inline-flex gap-4">
                         <label for="status-draft" class="inline-flex gap-1 items-center">
-                            <input type="radio" id="status-draft" name="status" value="draft" {{ if eq .Post.Status "draft"}}checked{{end}} />
+                            <input type="radio" id="status-draft" name="status" value="draft"
+                                   {{ if eq .Post.Status "draft"}}checked{{end}} />
                             <span>Draft</span>
                         </label>
                         <label for="status-published" class="inline-flex gap-1 items-center">
-                            <input type="radio" id="status-published" name="status" value="published" {{ if eq .Post.Status "published"}}checked{{end}} />
+                            <input type="radio" id="status-published" name="status" value="published"
+                                   {{ if eq .Post.Status "published"}}checked{{end}} />
                             <span>Published</span>
                         </label>
                     </div>
                 </div>
                 <div class="flex flex-col items-start">
                     <label for="publishedAt">Published At</label>
-                    <input type="datetime-local" id="publishedAt" name="publishedAt" value="{{formatDateTimeLocal .Post.PublishedAt}}"/>
+                    <input type="datetime-local" id="publishedAt" name="publishedAt"
+                           value="{{formatDateTimeLocal .Post.PublishedAt}}"/>
                 </div>
                 <div class="flex flex-col items-start">
                     <label for="excerpt">Excerpt</label>
@@ -48,6 +51,33 @@
                 <div class="flex flex-col items-start">
                     <label for="content">Content</label>
                     <textarea id="content" name="content">{{.Post.Content}}</textarea>
+                    <script type="module">
+                        import {Editor} from 'https://esm.sh/@tiptap/core'
+                        import StarterKit from 'https://esm.sh/@tiptap/starter-kit'
+
+                        const textareaContent = document.getElementById("content");
+
+                        const divContent = document.createElement("div");
+                        divContent.setAttribute("id", "content-wysiwyg-editor");
+                        divContent.setAttribute("class", "wysiwyg-editor");
+
+                        textareaContent.insertAdjacentElement("afterend", divContent);
+                        textareaContent.classList.add("hidden");
+
+                        const editor = new Editor({
+                            element: divContent,
+                            extensions: [StarterKit],
+                            content: '{{.Post.Content}}',
+                            editorProps: {
+                                attributes: {
+                                    class: "prose max-w-none px-3 py-2"
+                                },
+                            },
+                            onUpdate({editor}) {
+                                textareaContent.value = editor.getHTML();
+                            }
+                        });
+                    </script>
                 </div>
                 <div class="flex flex-row gap-1 py-1">
                     <button type="submit">Update</button>
