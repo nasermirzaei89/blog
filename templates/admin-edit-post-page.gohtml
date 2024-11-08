@@ -1,0 +1,61 @@
+{{define "admin-edit-post-page"}}
+    <!DOCTYPE html>
+    <html lang="en">
+    <head>
+        <meta charset="UTF-8">
+        <meta name="viewport" content="width=device-width, initial-scale=1.0">
+
+        <title>Edit Post | Admin | {{.Settings.Title}}</title>
+
+        {{template "tailwind"}}
+    </head>
+
+    <body>
+    {{template "header-admin" .}}
+    <main class="container mx-auto">
+        <section class="flex flex-col p-4 gap-4">
+                <h1>Edit Post</h1>
+            <form method="post" class="flex flex-col gap-2">
+                <div class="flex flex-col items-start">
+                    <label for="title">Title</label>
+                    <input type="text" id="title" name="title" required value="{{.Post.Title}}"/>
+                </div>
+                <div class="flex flex-col items-start">
+                    <label for="slug">Slug</label>
+                    <input type="text" id="slug" name="slug" required value="{{.Post.Slug}}"/>
+                </div>
+                <div class="flex flex-col items-start">
+                    <div class="label">Status</div>
+                    <div class="inline-flex gap-4">
+                        <label for="status-draft" class="inline-flex gap-1 items-center">
+                            <input type="radio" id="status-draft" name="status" value="draft" {{ if eq .Post.Status "draft"}}checked{{end}} />
+                            <span>Draft</span>
+                        </label>
+                        <label for="status-published" class="inline-flex gap-1 items-center">
+                            <input type="radio" id="status-published" name="status" value="published" {{ if eq .Post.Status "published"}}checked{{end}} />
+                            <span>Published</span>
+                        </label>
+                    </div>
+                </div>
+                <div class="flex flex-col items-start">
+                    <label for="publishedAt">Published At</label>
+                    <input type="datetime-local" id="publishedAt" name="publishedAt" value="{{formatDateTimeLocal .Post.PublishedAt}}"/>
+                </div>
+                <div class="flex flex-col items-start">
+                    <label for="excerpt">Excerpt</label>
+                    <textarea id="excerpt" name="excerpt">{{.Post.Excerpt}}</textarea>
+                </div>
+                <div class="flex flex-col items-start">
+                    <label for="content">Content</label>
+                    <textarea id="content" name="content">{{.Post.Content}}</textarea>
+                </div>
+                <div class="flex flex-row gap-1 py-1">
+                    <button type="submit">Update</button>
+                </div>
+            </form>
+        </section>
+    </main>
+    {{template "footer" .}}
+    </body>
+    </html>
+{{end}}

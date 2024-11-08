@@ -37,12 +37,16 @@
             @apply text-blue-700 underline;
         }
 
-        input {
-            @apply !rounded bg-white;
+        a.danger {
+            @apply text-red-700;
         }
 
-        textarea {
-            @apply rounded bg-white;
+        input[type="text"],
+        input[type="password"],
+        input[type="datetime-local"],
+        textarea,
+        select {
+            @apply !rounded bg-white;
         }
 
         button {

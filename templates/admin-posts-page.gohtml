@@ -1,0 +1,62 @@
+{{define "admin-posts-page"}}
+    <!DOCTYPE html>
+    <html lang="en">
+    <head>
+        <meta charset="UTF-8">
+        <meta name="viewport" content="width=device-width, initial-scale=1.0">
+
+        <title>Posts | Admin | {{.Settings.Title}}</title>
+
+        {{template "tailwind"}}
+    </head>
+
+    <body>
+    {{template "header-admin" .}}
+    <main class="container mx-auto">
+        <section class="flex flex-col p-4 gap-4">
+            <div class="flex flex-row items-center justify-between gap-4">
+                <h1>Posts</h1>
+                <a href="/admin/posts/new">Add New Post</a>
+            </div>
+            <table>
+                <thead class="border-b border-gray-900">
+                <tr>
+                    <th class="text-start w-full p-4">Title</th>
+                    <th class="text-center w-fit p-4 min-w-40">Published At</th>
+                    <th class="text-center w-fit p-4 min-w-60">Actions</th>
+                </tr>
+                </thead>
+                <tbody>
+                {{range .Posts}}
+                    <tr class="border-b border-gray-300 last:border-b-0">
+                        <td class="text-start w-full p-4">{{.Title}}</td>
+                        <td class="text-center w-fit p-4 whitespace-nowrap">
+                                {{ if eq .Status "draft"}}
+                                    <span>Draft</span>
+                                {{else}}
+                                    <time datetime="{{formatDateTime .PublishedAt}}">{{formatDate .PublishedAt}}</time>
+                                {{end}}
+                        </td>
+                        <td class="text-center w-fit p-4">
+                            <ul class="inline-flex gap-2">
+                                <li>
+                                    <a href="/posts/{{.Slug}}">View</a>
+                                </li>
+                                <li>
+                                    <a href="/admin/posts/{{.UUID}}/edit">Edit</a>
+                                </li>
+                                <li>
+                                    <a href="/admin/posts/{{.UUID}}/delete" class="danger">Delete</a>
+                                </li>
+                            </ul>
+                        </td>
+                    </tr>
+                {{end}}
+                </tbody>
+            </table>
+        </section>
+    </main>
+    {{template "footer" .}}
+    </body>
+    </html>
+{{end}}

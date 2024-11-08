@@ -1,0 +1,47 @@
+{{define "admin-settings-page"}}
+    <!DOCTYPE html>
+    <html lang="en">
+    <head>
+        <meta charset="UTF-8">
+        <meta name="viewport" content="width=device-width, initial-scale=1.0">
+
+        <title>Settings | Admin | {{.Settings.Title}}</title>
+
+        {{template "tailwind"}}
+    </head>
+
+    <body>
+    {{template "header-admin" .}}
+    <main class="container mx-auto">
+        <section class="flex flex-col p-4 gap-4">
+            <h1>Settings</h1>
+            <form method="post" class="flex flex-col gap-2">
+                <div class="flex flex-col items-start">
+                    <label for="title">Site Title</label>
+                    <input type="text" id="title" name="title" required value="{{.Settings.Title}}"/>
+                </div>
+                <div class="flex flex-col items-start">
+                    <label for="tagline">Tagline</label>
+                    <input type="text" id="tagline" name="tagline" value="{{.Settings.Tagline}}" />
+                </div>
+                <div class="flex flex-col items-start">
+                    <label for="timeZone">Time Zone</label>
+                    <select id="timeZone" name="timeZone" disabled>
+                        <optgroup label="America">
+                            <option value="America/Toronto" selected>Toronto</option>
+                        </optgroup>
+                        <optgroup label="Europe">
+                            <option value="Europe/Toronto">Berlin</option>
+                        </optgroup>
+                    </select>
+                </div>
+                <div class="flex flex-row gap-1 py-1">
+                    <button type="submit">Update</button>
+                </div>
+            </form>
+        </section>
+    </main>
+    {{template "footer" .}}
+    </body>
+    </html>
+{{end}}
