@@ -1,0 +1,41 @@
+{{define "home-page"}}
+    <!DOCTYPE html>
+    <html lang="en">
+    <head>
+        <meta charset="UTF-8">
+        <meta name="viewport" content="width=device-width, initial-scale=1.0">
+
+        <title>{{.Settings.Title}}</title>
+
+        {{template "tailwind"}}
+    </head>
+
+    <body>
+    {{template "header" .}}
+    <main class="container mx-auto">
+        <section id="posts">
+            {{range .Posts}}
+                <article class="p-4 gap-2 flex flex-col">
+                    <h2>
+                        <a href="/posts/{{.Slug}}">
+                            {{.Title}}
+                        </a>
+                    </h2>
+                    <div>
+                        {{ if eq .Status "draft"}}
+                            <span>Draft</span>
+                        {{else}}
+                            <time datetime="{{formatDateTime .PublishedAt}}">{{formatDate .PublishedAt}}</time>
+                        {{end}}
+                    </div>
+                    <div>
+                        {{.Excerpt}}
+                    </div>
+                </article>
+            {{end}}
+        </section>
+    </main>
+    {{template "footer" .}}
+    </body>
+    </html>
+{{end}}

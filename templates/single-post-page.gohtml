@@ -1,0 +1,35 @@
+{{define "single-post-page"}}
+    <!DOCTYPE html>
+    <html lang="en">
+    <head>
+        <meta charset="UTF-8">
+        <meta name="viewport" content="width=device-width, initial-scale=1.0">
+
+        <title>{{.Post.Title}} | {{.Settings.Title}}</title>
+
+        {{template "tailwind"}}
+    </head>
+
+    <body>
+    {{template "header-secondary" .}}
+    <main class="container mx-auto">
+        <article class="p-4 gap-2 flex flex-col">
+            <h1>
+                {{.Post.Title}}
+            </h1>
+            <div>
+                {{ if eq .Post.Status "draft"}}
+                    <span>Draft</span>
+                {{else}}
+                    <time datetime="{{formatDateTime .Post.PublishedAt}}">{{formatDate .Post.PublishedAt}}</time>
+                {{end}}
+            </div>
+            <div class="prose max-w-none">
+                {{.Post.Content}}
+            </div>
+        </article>
+    </main>
+    {{template "footer" .}}
+    </body>
+    </html>
+{{end}}

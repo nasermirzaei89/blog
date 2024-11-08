@@ -1,0 +1,25 @@
+{{define "404-page"}}
+    <!DOCTYPE html>
+    <html lang="en">
+    <head>
+        <meta charset="UTF-8">
+        <meta name="viewport" content="width=device-width, initial-scale=1.0">
+
+        <title>Not Found | {{.Settings.Title}}</title>
+
+        {{template "tailwind"}}
+    </head>
+
+    <body>
+    {{template "header-secondary" .}}
+    <main class="container mx-auto">
+        <section class="flex flex-col p-4 gap-2">
+            <h1>Page not found</h1>
+            <p>The page you are looking for not found.</p>
+            <p><a href="/">Go Home</a></p>
+        </section>
+    </main>
+    {{template "footer" .}}
+    </body>
+    </html>
+{{end}}

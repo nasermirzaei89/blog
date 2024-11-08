@@ -1,0 +1,37 @@
+{{define "login-page"}}
+    <!DOCTYPE html>
+    <html lang="en">
+    <head>
+        <meta charset="UTF-8">
+        <meta name="viewport" content="width=device-width, initial-scale=1.0">
+
+        <title>Login | {{.Settings.Title}}</title>
+
+        {{template "tailwind"}}
+    </head>
+
+    <body>
+    {{template "header-secondary" .}}
+    <main class="container mx-auto">
+        <section class="flex flex-col p-4 gap-2">
+            <h1>Login</h1>
+            <form method="post" class="flex flex-col gap-2">
+                <div class="flex flex-col">
+                    <label for="emailAddress">Email Address</label>
+                    <input type="email" id="emailAddress" name="emailAddress" placeholder="yourname@example.com"
+                           required class="form-input" />
+                </div>
+                <div class="flex flex-col">
+                    <label for="password">Password</label>
+                    <input type="password" id="password" name="password" placeholder="password" required/>
+                </div>
+                <div class="flex flex-row gap-1">
+                    <button type="submit">Sign In</button>
+                </div>
+            </form>
+        </section>
+    </main>
+    {{template "footer" .}}
+    </body>
+    </html>
+{{end}}
