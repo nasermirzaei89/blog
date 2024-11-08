@@ -76,12 +76,20 @@ func (h *Handler) SinglePostPageHandler() http.Handler {
 			return
 		}
 
+		if post.Status != PostStatusPublished && !h.isAuthenticated(r) {
+			h.NotFoundPageHandler()(w, r)
+
+			return
+		}
+
 		pageData := struct {
-			Settings Settings
-			Post     Post
+			Settings        Settings
+			Post            Post
+			IsAuthenticated bool
 		}{
-			Settings: settings,
-			Post:     *post,
+			Settings:        settings,
+			Post:            *post,
+			IsAuthenticated: h.isAuthenticated(r),
 		}
 
 		err = h.tpl.ExecuteTemplate(w, "single-post-page", pageData)
@@ -151,14 +159,20 @@ func (h *Handler) LogoutHandler() http.Handler {
 	})
 }
 
+func (h *Handler) isAuthenticated(r *http.Request) bool {
+	session, err := h.cookieStore.Get(r, sessionNameAuth)
+	if err != nil {
+		panic(fmt.Errorf("failed to get session: %w", err))
+	}
+
+	auth, ok := session.Values["authenticated"].(bool)
+
+	return ok && auth
+}
+
 func (h *Handler) AuthenticatedMiddleware(next http.Handler) http.Handler {
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		session, err := h.cookieStore.Get(r, sessionNameAuth)
-		if err != nil {
-			panic(fmt.Errorf("failed to get session: %w", err))
-		}
-
-		if auth, ok := session.Values["authenticated"].(bool); !ok || !auth {
+		if !h.isAuthenticated(r) {
 			http.Redirect(w, r, "/login", http.StatusUnauthorized)
 			return
 		}

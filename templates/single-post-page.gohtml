@@ -27,6 +27,9 @@
             <div class="prose max-w-none">
                 {{.Post.Content}}
             </div>
+            {{ if .IsAuthenticated }}
+                <a href="/admin/posts/{{.Post.UUID}}/edit">Edit Post</a>
+            {{end}}
         </article>
     </main>
     {{template "footer" .}}
