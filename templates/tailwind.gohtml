@@ -1,6 +1,10 @@
 {{define "tailwind"}}
     <script src="https://cdn.tailwindcss.com?plugins=typography,forms"></script>
     <style type="text/tailwindcss">
+        body {
+            @apply bg-gray-50;
+        }
+
         h1 {
             @apply text-4xl;
         }
@@ -9,7 +13,7 @@
             @apply text-3xl;
         }
 
-        h3{
+        h3 {
             @apply text-2xl;
         }
 
@@ -33,8 +37,16 @@
             @apply text-blue-700 underline;
         }
 
+        input {
+            @apply !rounded bg-white;
+        }
+
+        textarea {
+            @apply rounded bg-white;
+        }
+
         button {
-            @apply border border-gray-700 rounded bg-gray-300 text-gray-700 px-4 py-1;
+            @apply border border-gray-700 rounded bg-white hover:bg-gray-100 active:bg-gray-200 text-gray-700 px-3 py-2 text-base leading-normal;
         }
     </style>
 {{end}}
