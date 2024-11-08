@@ -24,8 +24,8 @@ func main() {
 
 	mux := http.NewServeMux()
 
-	username := cmp.Or(os.Getenv("USERNAME"), "admin")
-	password := cmp.Or(os.Getenv("PASSWORD"), "admin")
+	username := cmp.Or(os.Getenv("ADMIN_USERNAME"), "admin")
+	password := cmp.Or(os.Getenv("ADMIN_PASSWORD"), "admin")
 
 	key := cmp.Or(os.Getenv("STORE_KEY"), "super-secret-key")
 	cookieStore := sessions.NewCookieStore([]byte(key))
