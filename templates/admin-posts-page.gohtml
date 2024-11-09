@@ -9,7 +9,6 @@
 
         {{template "tailwind"}}
     </head>
-
     <body>
     {{template "header-admin" .}}
     <main class="container mx-auto">
@@ -31,11 +30,11 @@
                     <tr class="border-b border-gray-300 dark:border-gray-700 last:border-b-0">
                         <td class="text-start w-full p-4">{{.Title}}</td>
                         <td class="text-center w-fit p-4 whitespace-nowrap">
-                                {{ if eq .Status "draft"}}
-                                    <span>Draft</span>
-                                {{else}}
-                                    <time datetime="{{formatDateTime .PublishedAt}}">{{formatDate .PublishedAt}}</time>
-                                {{end}}
+                            {{ if eq .Status "draft"}}
+                                <span>Draft</span>
+                            {{else}}
+                                <time datetime="{{formatDateTime .PublishedAt}}">{{formatDate .PublishedAt}}</time>
+                            {{end}}
                         </td>
                         <td class="text-center w-fit p-4">
                             <ul class="inline-flex gap-2">
@@ -46,7 +45,8 @@
                                     <a href="/admin/posts/{{.UUID}}/edit">Edit</a>
                                 </li>
                                 <li>
-                                    <a href="/admin/posts/{{.UUID}}/delete" class="danger">Delete</a>
+                                    <a href="/admin/posts/{{.UUID}}/delete" class="danger"
+                                       data-need-confirmation>Delete</a>
                                 </li>
                             </ul>
                         </td>
@@ -57,6 +57,40 @@
         </section>
     </main>
     {{template "footer" .}}
+    <script>
+        const elements = document.querySelectorAll("a[data-need-confirmation]")
+
+        elements.forEach(element => {
+            const link = element.href;
+            const text = element.textContent;
+
+            const dialog = document.createElement("dialog")
+            dialog.innerHTML = `
+                <p>Are you sure you want to proceed?</p>
+                <div class="inline-flex gap-2">
+                    <button type="button" data-confirm>${text}</button>
+                    <button type="button" data-cancel>Cancel</button>
+                </div>
+            `;
+            const confirmButton = dialog.querySelector("button[data-confirm]")
+            const cancelButton = dialog.querySelector("button[data-cancel]")
+
+            confirmButton.addEventListener("click", () => {
+                window.location.href = link;
+            })
+
+            cancelButton.addEventListener("click", () => {
+                dialog.close();
+            })
+
+            element.insertAdjacentElement("afterend", dialog);
+
+            element.addEventListener("click", (event) => {
+                event.preventDefault();
+                dialog.showModal();
+            })
+        })
+    </script>
     </body>
     </html>
 {{end}}
