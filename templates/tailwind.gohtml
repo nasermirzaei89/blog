@@ -1,8 +1,9 @@
 {{define "tailwind"}}
+{{/* TODO: cdn.tailwindcss.com should not be used in production */}}
     <script src="https://cdn.tailwindcss.com?plugins=typography,forms"></script>
     <style type="text/tailwindcss">
         body {
-            @apply bg-gray-50;
+            @apply bg-gray-50 dark:bg-gray-950 text-gray-950 dark:text-gray-50;
         }
 
         h1 {
@@ -34,11 +35,11 @@
         }
 
         a {
-            @apply text-blue-700 underline;
+            @apply text-blue-700 dark:text-blue-300 underline;
         }
 
         a.danger {
-            @apply text-red-700;
+            @apply text-red-700 dark:text-red-300;
         }
 
         input[type="text"],
@@ -46,15 +47,15 @@
         input[type="datetime-local"],
         textarea,
         select {
-            @apply !rounded bg-white;
+            @apply !rounded bg-white dark:bg-black;
         }
 
         button {
-            @apply border border-gray-700 rounded bg-white hover:bg-gray-100 active:bg-gray-200 text-gray-700 px-3 py-2 text-base leading-normal;
+            @apply border border-gray-700 dark:border-gray-300 rounded bg-white dark:bg-black hover:bg-gray-100 dark:hover:bg-gray-900 active:bg-gray-200 dark:active:bg-gray-800 text-gray-700 dark:text-gray-300 px-3 py-2 text-base leading-normal;
         }
 
         .wysiwyg-editor {
-            @apply border border-gray-700 rounded bg-white;
+            @apply border border-gray-700 dark:border-gray-300 rounded bg-white dark:bg-black w-full;
         }
     </style>
 {{end}}

@@ -19,7 +19,7 @@
                 <a href="/admin/posts/new">Add New Post</a>
             </div>
             <table>
-                <thead class="border-b border-gray-900">
+                <thead class="border-b border-gray-900 dark:border-gray-100">
                 <tr>
                     <th class="text-start w-full p-4">Title</th>
                     <th class="text-center w-fit p-4 min-w-40">Published At</th>
@@ -28,7 +28,7 @@
                 </thead>
                 <tbody>
                 {{range .Posts}}
-                    <tr class="border-b border-gray-300 last:border-b-0">
+                    <tr class="border-b border-gray-300 dark:border-gray-700 last:border-b-0">
                         <td class="text-start w-full p-4">{{.Title}}</td>
                         <td class="text-center w-fit p-4 whitespace-nowrap">
                                 {{ if eq .Status "draft"}}

@@ -1,0 +1,30 @@
+{{define "wysiwyg-editor"}}
+    <script type="module">
+        import {Editor} from 'https://esm.sh/@tiptap/core'
+        import StarterKit from 'https://esm.sh/@tiptap/starter-kit'
+
+        const textarea = document.getElementById("{{.}}");
+
+        const div = document.createElement("div");
+        div.setAttribute("id", "{{.}}-wysiwyg-editor");
+        div.setAttribute("class", "wysiwyg-editor");
+
+        textarea.insertAdjacentElement("afterend", div);
+        textarea.classList.add("hidden");
+
+        const editor = new Editor({
+            element: div,
+            extensions: [StarterKit],
+            content: textarea.value,
+            class: "w-full",
+            editorProps: {
+                attributes: {
+                    class: "prose dark:prose-invert max-w-none min-h-32 px-3 py-2"
+                },
+            },
+            onUpdate({editor}) {
+                textarea.value = editor.getHTML();
+            }
+        });
+    </script>
+{{end}}
