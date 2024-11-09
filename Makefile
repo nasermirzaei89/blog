@@ -1,3 +1,5 @@
+CGO_ENABLED=1
+
 default:
 	echo "Hello Future"
 

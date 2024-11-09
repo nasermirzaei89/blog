@@ -5,6 +5,7 @@ import (
 	"embed"
 	"fmt"
 	"github.com/gorilla/sessions"
+	"github.com/nasermirzaei89/blog/db"
 	"html/template"
 	"log"
 	"net/http"
@@ -39,11 +40,26 @@ func main() {
 		SameSite:    0,
 	}
 
+	dbDSN := os.Getenv("DB_DSN")
+
+	sqlDB, err := db.NewDB(dbDSN)
+	if err != nil {
+		panic(fmt.Errorf("failed to connect to database: %w", err))
+	}
+
+	err = db.Migrate(sqlDB)
+	if err != nil {
+		panic(fmt.Errorf("failed to migrate database: %w", err))
+	}
+
+	postRepo := db.NewPostRepository(sqlDB)
+
 	h := Handler{
 		tpl:         fs,
 		username:    username,
 		password:    password,
 		cookieStore: cookieStore,
+		postRepo:    postRepo,
 	}
 
 	mux.Handle("GET /", h.HomePageHandler())

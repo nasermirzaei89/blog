@@ -2,9 +2,11 @@ package main
 
 import (
 	"cmp"
+	"errors"
 	"fmt"
 	"github.com/google/uuid"
 	"github.com/gorilla/sessions"
+	"github.com/nasermirzaei89/blog/service"
 	"html/template"
 	"net/http"
 	"strings"
@@ -16,6 +18,7 @@ type Handler struct {
 	username    string
 	password    string
 	cookieStore *sessions.CookieStore
+	postRepo    service.PostRepository
 }
 
 func (h *Handler) NotFoundPageHandler() http.HandlerFunc {
@@ -23,9 +26,9 @@ func (h *Handler) NotFoundPageHandler() http.HandlerFunc {
 		w.WriteHeader(http.StatusNotFound)
 
 		pageData := struct {
-			Settings Settings
+			Settings service.Settings
 		}{
-			Settings: settings,
+			Settings: service.InMemorySettings,
 		}
 
 		err := h.tpl.ExecuteTemplate(w, "404-page", pageData)
@@ -43,51 +46,49 @@ func (h *Handler) HomePageHandler() http.Handler {
 			return
 		}
 
-		pageData := struct {
-			Settings Settings
-			Posts    PostList
-		}{
-			Settings: settings,
-			Posts:    posts.WithStatus(PostStatusPublished),
+		publishedPostList, err := h.postRepo.ListPublished(r.Context())
+		if err != nil {
+			panic(fmt.Errorf("failed to list published posts: %w", err))
 		}
-		err := h.tpl.ExecuteTemplate(w, "home-page", pageData)
+
+		pageData := struct {
+			Settings service.Settings
+			Posts    service.PostList
+		}{
+			Settings: service.InMemorySettings,
+			Posts:    publishedPostList,
+		}
+
+		err = h.tpl.ExecuteTemplate(w, "home-page", pageData)
 		if err != nil {
 			panic(fmt.Errorf("failed to render home page template: %w", err))
 		}
 	})
 }
 
-func findPostBySlug(postSlug string) (*Post, error) {
-	for i := range posts {
-		if posts[i].Slug == postSlug {
-			return &posts[i], nil
-		}
-	}
-
-	return nil, fmt.Errorf("post with slug %s not found", postSlug)
-}
-
 func (h *Handler) SinglePostPageHandler() http.Handler {
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		post, err := findPostBySlug(r.PathValue("postSlug"))
+		postSlug := r.PathValue("postSlug")
+
+		post, err := h.postRepo.GetBySlug(r.Context(), postSlug)
 		if err != nil {
 			h.NotFoundPageHandler()(w, r)
 
 			return
 		}
 
-		if post.Status != PostStatusPublished && !h.isAuthenticated(r) {
+		if post.Status != service.PostStatusPublished && !h.isAuthenticated(r) {
 			h.NotFoundPageHandler()(w, r)
 
 			return
 		}
 
 		pageData := struct {
-			Settings        Settings
-			Post            Post
+			Settings        service.Settings
+			Post            service.Post
 			IsAuthenticated bool
 		}{
-			Settings:        settings,
+			Settings:        service.InMemorySettings,
 			Post:            *post,
 			IsAuthenticated: h.isAuthenticated(r),
 		}
@@ -102,9 +103,9 @@ func (h *Handler) SinglePostPageHandler() http.Handler {
 func (h *Handler) LoginPageHandler() http.Handler {
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		pageData := struct {
-			Settings Settings
+			Settings service.Settings
 		}{
-			Settings: settings,
+			Settings: service.InMemorySettings,
 		}
 
 		err := h.tpl.ExecuteTemplate(w, "login-page", pageData)
@@ -173,7 +174,7 @@ func (h *Handler) isAuthenticated(r *http.Request) bool {
 func (h *Handler) AuthenticatedMiddleware(next http.Handler) http.Handler {
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		if !h.isAuthenticated(r) {
-			http.Redirect(w, r, "/login", http.StatusUnauthorized)
+			http.Redirect(w, r, "/login", http.StatusFound)
 			return
 		}
 
@@ -191,15 +192,20 @@ func (h *Handler) AdminPageHandler() http.Handler {
 
 func (h *Handler) AdminPostsPageHandler() http.Handler {
 	hf := http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		pageData := struct {
-			Settings Settings
-			Posts    PostList
-		}{
-			Settings: settings,
-			Posts:    posts,
+		allPostList, err := h.postRepo.ListAll(r.Context())
+		if err != nil {
+			panic(fmt.Errorf("failed to list all posts: %w", err))
 		}
 
-		err := h.tpl.ExecuteTemplate(w, "admin-posts-page", pageData)
+		pageData := struct {
+			Settings service.Settings
+			Posts    service.PostList
+		}{
+			Settings: service.InMemorySettings,
+			Posts:    allPostList,
+		}
+
+		err = h.tpl.ExecuteTemplate(w, "admin-posts-page", pageData)
 		if err != nil {
 			panic(fmt.Errorf("failed to render admin posts page template: %w", err))
 		}
@@ -211,9 +217,9 @@ func (h *Handler) AdminPostsPageHandler() http.Handler {
 func (h *Handler) AdminNewPostPageHandler() http.Handler {
 	hf := http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		pageData := struct {
-			Settings Settings
+			Settings service.Settings
 		}{
-			Settings: settings,
+			Settings: service.InMemorySettings,
 		}
 
 		err := h.tpl.ExecuteTemplate(w, "admin-new-post-page", pageData)
@@ -239,17 +245,20 @@ func (h *Handler) AdminCreateNewPostHandler() http.Handler {
 		excerpt := strings.TrimSpace(r.FormValue("excerpt"))
 		content := strings.TrimSpace(r.FormValue("content"))
 
-		post := Post{
+		post := service.Post{
 			UUID:        uuid.New(),
 			Title:       title,
 			Slug:        slug,
-			Status:      PostStatus(status),
+			Status:      service.PostStatus(status),
 			PublishedAt: publishedAt,
 			Excerpt:     excerpt,
 			Content:     template.HTML(content),
 		}
 
-		posts = append(posts, post)
+		err = h.postRepo.Insert(r.Context(), &post)
+		if err != nil {
+			panic(fmt.Errorf("failed to insert post: %w", err))
+		}
 
 		http.Redirect(w, r, "/admin/posts/"+post.UUID.String()+"/edit", http.StatusFound)
 	})
@@ -259,28 +268,34 @@ func (h *Handler) AdminCreateNewPostHandler() http.Handler {
 
 func (h *Handler) AdminEditPostPageHandler() http.Handler {
 	hf := http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		postUUID := strings.TrimSpace(r.PathValue("postUuid"))
-		var post *Post
-		for i := range posts {
-			if posts[i].UUID.String() == postUUID {
-				post = &posts[i]
-			}
+		postUUIDStr := strings.TrimSpace(r.PathValue("postUuid"))
+
+		postUUID, err := uuid.Parse(postUUIDStr)
+		if err != nil {
+			panic(fmt.Errorf("failed to parse post uuid: %w", err))
 		}
 
-		if post == nil {
-			h.NotFoundPageHandler().ServeHTTP(w, r)
-			return
+		post, err := h.postRepo.Get(r.Context(), postUUID)
+		if err != nil {
+			var postByUUIDNotFoundErr service.PostByUUIDNotFoundError
+			if errors.As(err, &postByUUIDNotFoundErr) {
+				h.NotFoundPageHandler().ServeHTTP(w, r)
+
+				return
+			}
+
+			panic(fmt.Errorf("failed to get post: %w", err))
 		}
 
 		pageData := struct {
-			Settings Settings
-			Post     Post
+			Settings service.Settings
+			Post     service.Post
 		}{
-			Settings: settings,
+			Settings: service.InMemorySettings,
 			Post:     *post,
 		}
 
-		err := h.tpl.ExecuteTemplate(w, "admin-edit-post-page", pageData)
+		err = h.tpl.ExecuteTemplate(w, "admin-edit-post-page", pageData)
 		if err != nil {
 			panic(fmt.Errorf("failed to render admin edit post page template: %w", err))
 		}
@@ -291,37 +306,43 @@ func (h *Handler) AdminEditPostPageHandler() http.Handler {
 
 func (h *Handler) AdminUpdatePostHandler() http.Handler {
 	hf := http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		postUUID := strings.TrimSpace(r.PathValue("postUuid"))
-		var post *Post
-		for i := range posts {
-			if posts[i].UUID.String() == postUUID {
-				post = &posts[i]
+		postUUIDStr := strings.TrimSpace(r.PathValue("postUuid"))
+
+		postUUID, err := uuid.Parse(postUUIDStr)
+		if err != nil {
+			panic(fmt.Errorf("failed to parse post uuid: %w", err))
+		}
+
+		post, err := h.postRepo.Get(r.Context(), postUUID)
+		if err != nil {
+			var postByUUIDNotFoundErr service.PostByUUIDNotFoundError
+			if errors.As(err, &postByUUIDNotFoundErr) {
+				h.NotFoundPageHandler().ServeHTTP(w, r)
+
+				return
 			}
+
+			panic(fmt.Errorf("failed to get post: %w", err))
 		}
 
-		if post == nil {
-			h.NotFoundPageHandler().ServeHTTP(w, r)
-			return
-		}
+		post.Title = strings.TrimSpace(r.FormValue("title"))
+		post.Slug = strings.TrimSpace(r.FormValue("slug"))
+		post.Status = service.PostStatus(strings.TrimSpace(r.FormValue("status")))
 
-		title := strings.TrimSpace(r.FormValue("title"))
-		slug := strings.TrimSpace(r.FormValue("slug"))
-		status := strings.TrimSpace(r.FormValue("status"))
 		publishedAtStr := strings.TrimSpace(r.FormValue("publishedAt"))
 		publishedAt, err := time.Parse(DateTimeLocalFormat, publishedAtStr)
 		if err != nil {
 			panic(fmt.Errorf("failed to parse published at: %w", err))
 		}
-
-		excerpt := strings.TrimSpace(r.FormValue("excerpt"))
-		content := strings.TrimSpace(r.FormValue("content"))
-
-		post.Title = title
-		post.Slug = slug
-		post.Status = PostStatus(status)
 		post.PublishedAt = publishedAt
-		post.Excerpt = excerpt
-		post.Content = template.HTML(content)
+
+		post.Excerpt = strings.TrimSpace(r.FormValue("excerpt"))
+		post.Content = template.HTML(strings.TrimSpace(r.FormValue("content")))
+
+		err = h.postRepo.Replace(r.Context(), postUUID, post)
+		if err != nil {
+			panic(fmt.Errorf("failed to update post: %w", err))
+		}
 
 		http.Redirect(w, r, "/admin/posts/"+post.UUID.String()+"/edit", http.StatusFound)
 	})
@@ -331,18 +352,31 @@ func (h *Handler) AdminUpdatePostHandler() http.Handler {
 
 func (h *Handler) AdminDeletePostHandler() http.Handler {
 	hf := http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		postUUID := strings.TrimSpace(r.PathValue("postUuid"))
+		postUUIDStr := strings.TrimSpace(r.PathValue("postUuid"))
 
-		for i := range posts {
-			if posts[i].UUID.String() == postUUID {
-				posts = append(posts[:i], posts[i+1:]...)
-				http.Redirect(w, r, "/admin/posts", http.StatusFound)
+		postUUID, err := uuid.Parse(postUUIDStr)
+		if err != nil {
+			panic(fmt.Errorf("failed to parse post uuid: %w", err))
+		}
+
+		_, err = h.postRepo.Get(r.Context(), postUUID)
+		if err != nil {
+			var postByUUIDNotFoundErr service.PostByUUIDNotFoundError
+			if errors.As(err, &postByUUIDNotFoundErr) {
+				h.NotFoundPageHandler().ServeHTTP(w, r)
 
 				return
 			}
+
+			panic(fmt.Errorf("failed to get post: %w", err))
 		}
 
-		h.NotFoundPageHandler().ServeHTTP(w, r)
+		err = h.postRepo.Delete(r.Context(), postUUID)
+		if err != nil {
+			panic(fmt.Errorf("failed to update post: %w", err))
+		}
+
+		http.Redirect(w, r, "/admin/posts", http.StatusFound)
 	})
 
 	return h.AuthenticatedMiddleware(hf)
@@ -351,9 +385,9 @@ func (h *Handler) AdminDeletePostHandler() http.Handler {
 func (h *Handler) AdminSettingsPageHandler() http.Handler {
 	hf := http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		pageData := struct {
-			Settings Settings
+			Settings service.Settings
 		}{
-			Settings: settings,
+			Settings: service.InMemorySettings,
 		}
 
 		err := h.tpl.ExecuteTemplate(w, "admin-settings-page", pageData)
@@ -375,9 +409,9 @@ func (h *Handler) AdminUpdateSettingsHandler() http.Handler {
 			panic(fmt.Errorf("failed to load timezone name: %w", err))
 		}
 
-		settings.Title = title
-		settings.Tagline = tagline
-		settings.TimeZone = timeZone
+		service.InMemorySettings.Title = title
+		service.InMemorySettings.Tagline = tagline
+		service.InMemorySettings.TimeZone = timeZone
 
 		h.AdminSettingsPageHandler().ServeHTTP(w, r)
 	})
