@@ -1,5 +1,5 @@
 {{define "tailwind"}}
-{{/* TODO: cdn.tailwindcss.com should not be used in production */}}
+    {{/* TODO: cdn.tailwindcss.com should not be used in production */}}
     <script src="https://cdn.tailwindcss.com?plugins=typography,forms"></script>
     <style type="text/tailwindcss">
         body {
@@ -56,6 +56,18 @@
 
         .wysiwyg-editor {
             @apply border border-gray-700 dark:border-gray-300 rounded bg-white dark:bg-black w-full;
+        }
+
+        .wysiwyg-editor-toolbar {
+            @apply flex flex-row flex-wrap divide-x py-2 border-b border-gray-700 dark:border-gray-300;
+        }
+
+        .wysiwyg-editor-toolbar div {
+            @apply inline-flex gap-2 px-2;
+        }
+
+        .wysiwyg-editor-toolbar div button svg {
+            @apply fill-gray-700 dark:fill-gray-300 size-5;
         }
 
         dialog[open] {
