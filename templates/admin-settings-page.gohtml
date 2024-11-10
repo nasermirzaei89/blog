@@ -26,14 +26,17 @@
                 </div>
                 <div class="flex flex-col items-start">
                     <label for="timeZone">Time Zone</label>
-                    <select id="timeZone" name="timeZone" disabled>
-                        <optgroup label="America">
-                            <option value="America/Toronto" selected>Toronto</option>
-                        </optgroup>
-                        <optgroup label="Europe">
-                            <option value="Europe/Toronto">Berlin</option>
-                        </optgroup>
-                    </select>
+                    <input type="text" id="timeZone" name="timeZone" value="{{.Settings.TimeZone}}"
+                           list="timeZone-list">
+                    <datalist id="timeZone-list">
+                        {{range $region, $zones := .AvailableTimeZones}}
+                            <optgroup label="{{$region}}">
+                                {{range $zones}}
+                                    <option value="{{.}}">{{.}}</option>
+                                {{end}}
+                            </optgroup>
+                        {{end}}
+                    </datalist>
                 </div>
                 <div class="flex flex-row gap-1 py-1">
                     <button type="submit">Update</button>

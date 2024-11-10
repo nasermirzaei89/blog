@@ -81,11 +81,6 @@ func (repo *SettingRepository) Save(ctx context.Context, settings *service.Setti
 		return fmt.Errorf("error exec db query: %w", err)
 	}
 
-	err = tx.Commit()
-	if err != nil {
-		return fmt.Errorf("error committing transaction: %w", err)
-	}
-
 	// Tagline
 	q2 := squirrel.Update(repo.table).Set("value", settings.Tagline).Where(squirrel.Eq{"name": "tagline"})
 

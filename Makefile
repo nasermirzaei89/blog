@@ -6,8 +6,11 @@ default:
 .which-air:
 	which air || go install github.com/air-verse/air@latest
 
-run:
+run: .which-air
 	air
 
 format:
 	gofmt -w -s .
+
+test:
+	go test ./...

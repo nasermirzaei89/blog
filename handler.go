@@ -453,9 +453,11 @@ func (h *Handler) AdminSettingsPageHandler() http.Handler {
 		}
 
 		pageData := struct {
-			Settings service.Settings
+			Settings           service.Settings
+			AvailableTimeZones map[string][]string
 		}{
-			Settings: *settings,
+			Settings:           *settings,
+			AvailableTimeZones: AvailableTimeZones,
 		}
 
 		err = h.tpl.ExecuteTemplate(w, "admin-settings-page", pageData)
@@ -471,7 +473,7 @@ func (h *Handler) AdminUpdateSettingsHandler() http.Handler {
 	hf := http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		title := strings.TrimSpace(r.FormValue("title"))
 		tagline := strings.TrimSpace(r.FormValue("tagline"))
-		timeZoneName := strings.TrimSpace(r.FormValue("timezone"))
+		timeZoneName := strings.TrimSpace(r.FormValue("timeZone"))
 		timeZone, err := time.LoadLocation(timeZoneName)
 		if err != nil {
 			// TODO: show error
