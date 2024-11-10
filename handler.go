@@ -278,8 +278,13 @@ func (h *Handler) AdminCreateNewPostHandler() http.Handler {
 
 		var publishedAt *time.Time
 		if status == service.PostStatusPublished {
+			settings, err := h.settingRepo.Load(r.Context())
+			if err != nil {
+				panic(fmt.Errorf("failed to load settings: %w", err))
+			}
+
 			publishedAtStr := strings.TrimSpace(r.FormValue("publishedAt"))
-			v, err := time.Parse(DateTimeLocalFormat, publishedAtStr)
+			v, err := time.ParseInLocation(DateTimeLocalFormat, publishedAtStr, settings.TimeZone)
 			if err != nil {
 				// TODO: show invalid published at field
 				panic(fmt.Errorf("failed to parse published at: %w", err))
@@ -386,8 +391,14 @@ func (h *Handler) AdminUpdatePostHandler() http.Handler {
 
 		var publishedAt *time.Time
 		if post.Status == service.PostStatusPublished {
+			settings, err := h.settingRepo.Load(r.Context())
+			if err != nil {
+				panic(fmt.Errorf("failed to load settings: %w", err))
+			}
+
 			publishedAtStr := strings.TrimSpace(r.FormValue("publishedAt"))
-			v, err := time.Parse(DateTimeLocalFormat, publishedAtStr)
+
+			v, err := time.ParseInLocation(DateTimeLocalFormat, publishedAtStr, settings.TimeZone)
 			if err != nil {
 				// TODO: show error
 				panic(fmt.Errorf("failed to parse published at: %w", err))

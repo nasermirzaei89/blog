@@ -21,7 +21,7 @@
                 {{ if eq .Post.Status "draft"}}
                     <span>Draft</span>
                 {{else}}
-                    <time datetime="{{formatDateTime .Post.PublishedAt}}">{{formatDate .Post.PublishedAt}}</time>
+                    <time datetime="{{formatDateTime .Post.PublishedAt .Settings.TimeZone}}">{{formatDate .Post.PublishedAt .Settings.TimeZone}}</time>
                 {{end}}
             </div>
             <div class="prose dark:prose-invert max-w-none">

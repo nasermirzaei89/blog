@@ -42,7 +42,7 @@
                 <div class="flex flex-col items-start">
                     <label for="publishedAt">Published At</label>
                     <input type="datetime-local" id="publishedAt" name="publishedAt"
-                           {{ if .Post.PublishedAt}}value="{{formatDateTimeLocal .Post.PublishedAt}}"{{end}}/>
+                           {{ if .Post.PublishedAt}}value="{{formatDateTimeLocal .Post.PublishedAt .Settings.TimeZone}}"{{end}}/>
                 </div>
                 <div class="flex flex-col items-start">
                     <label for="excerpt">Excerpt</label>

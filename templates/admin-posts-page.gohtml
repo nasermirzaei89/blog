@@ -33,7 +33,7 @@
                             {{ if eq .Status "draft"}}
                                 <span>Draft</span>
                             {{else}}
-                                <time datetime="{{formatDateTime .PublishedAt}}">{{formatDate .PublishedAt}}</time>
+                                <time datetime="{{formatDateTime .PublishedAt $.Settings.TimeZone}}">{{formatDate .PublishedAt $.Settings.TimeZone}}</time>
                             {{end}}
                         </td>
                         <td class="text-center w-fit p-4">
