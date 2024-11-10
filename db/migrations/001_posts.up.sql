@@ -1,14 +1,12 @@
 CREATE TABLE posts
 (
     uuid         VARCHAR PRIMARY KEY,
-
     title        VARCHAR   NOT NULL,
     slug         VARCHAR   NOT NULL UNIQUE,
     status       VARCHAR   NOT NULL,
-    published_at TIMESTAMP NOT NULL,
+    published_at TIMESTAMP NULL,
     excerpt      VARCHAR   NOT NULL,
     content      INTEGER   NOT NULL,
-
     created_at   TIMESTAMP NOT NULL,
     updated_at   TIMESTAMP NOT NULL
 );

@@ -20,14 +20,14 @@ type PostRepository struct {
 func (repo *PostRepository) Insert(ctx context.Context, post *service.Post) error {
 	q := squirrel.Insert(repo.table).Columns(repo.cols...).Values(
 		post.UUID,
+		post.CreatedAt,
+		post.UpdatedAt,
 		post.Title,
 		post.Slug,
 		post.Status,
 		post.PublishedAt,
 		post.Excerpt,
 		post.Content,
-		post.CreatedAt,
-		post.UpdatedAt,
 	)
 
 	_, err := q.RunWith(repo.db).ExecContext(ctx)
@@ -45,14 +45,14 @@ func (repo *PostRepository) Get(ctx context.Context, postUUID uuid.UUID) (*servi
 
 	err := q.RunWith(repo.db).QueryRowContext(ctx).Scan(
 		&post.UUID,
+		&post.CreatedAt,
+		&post.UpdatedAt,
 		&post.Title,
 		&post.Slug,
 		&post.Status,
 		&post.PublishedAt,
 		&post.Excerpt,
 		&post.Content,
-		&post.CreatedAt,
-		&post.UpdatedAt,
 	)
 	if err != nil {
 		if errors.Is(err, sql.ErrNoRows) {
@@ -72,14 +72,14 @@ func (repo *PostRepository) GetBySlug(ctx context.Context, slug string) (*servic
 
 	err := q.RunWith(repo.db).QueryRowContext(ctx).Scan(
 		&post.UUID,
+		&post.CreatedAt,
+		&post.UpdatedAt,
 		&post.Title,
 		&post.Slug,
 		&post.Status,
 		&post.PublishedAt,
 		&post.Excerpt,
 		&post.Content,
-		&post.CreatedAt,
-		&post.UpdatedAt,
 	)
 	if err != nil {
 		return nil, fmt.Errorf("error on query db row: %w", err)
@@ -109,14 +109,14 @@ func (repo *PostRepository) ListAll(ctx context.Context) ([]service.Post, error)
 
 		err := rows.Scan(
 			&post.UUID,
+			&post.CreatedAt,
+			&post.UpdatedAt,
 			&post.Title,
 			&post.Slug,
 			&post.Status,
 			&post.PublishedAt,
 			&post.Excerpt,
 			&post.Content,
-			&post.CreatedAt,
-			&post.UpdatedAt,
 		)
 		if err != nil {
 			return nil, fmt.Errorf("error on row scan: %w", err)
@@ -153,14 +153,14 @@ func (repo *PostRepository) ListPublished(ctx context.Context) ([]service.Post, 
 
 		err := rows.Scan(
 			&post.UUID,
+			&post.CreatedAt,
+			&post.UpdatedAt,
 			&post.Title,
 			&post.Slug,
 			&post.Status,
 			&post.PublishedAt,
 			&post.Excerpt,
 			&post.Content,
-			&post.CreatedAt,
-			&post.UpdatedAt,
 		)
 
 		if err != nil {
@@ -181,14 +181,14 @@ func (repo *PostRepository) Replace(ctx context.Context, itemUUID uuid.UUID, pos
 	q := squirrel.Update(repo.table).
 		SetMap(map[string]interface{}{
 			"uuid":         post.UUID,
+			"created_at":   post.CreatedAt,
+			"updated_at":   post.UpdatedAt,
 			"title":        post.Title,
 			"slug":         post.Slug,
 			"status":       post.Status,
 			"published_at": post.PublishedAt,
 			"excerpt":      post.Excerpt,
 			"content":      post.Content,
-			"created_at":   post.CreatedAt,
-			"updated_at":   post.UpdatedAt,
 		},
 		).Where(squirrel.Eq{"uuid": itemUUID})
 
@@ -219,14 +219,14 @@ func NewPostRepository(db *sql.DB) *PostRepository {
 		table: "posts",
 		cols: []string{
 			"uuid",
+			"created_at",
+			"updated_at",
 			"title",
 			"slug",
 			"status",
 			"published_at",
 			"excerpt",
 			"content",
-			"created_at",
-			"updated_at",
 		},
 	}
 }

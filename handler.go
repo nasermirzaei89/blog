@@ -19,19 +19,25 @@ type Handler struct {
 	password    string
 	cookieStore *sessions.CookieStore
 	postRepo    service.PostRepository
+	settingRepo service.SettingRepository
 }
 
 func (h *Handler) NotFoundPageHandler() http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
 		w.WriteHeader(http.StatusNotFound)
 
+		settings, err := h.settingRepo.Load(r.Context())
+		if err != nil {
+			panic(fmt.Errorf("failed to load settings: %w", err))
+		}
+
 		pageData := struct {
 			Settings service.Settings
 		}{
-			Settings: service.InMemorySettings,
+			Settings: *settings,
 		}
 
-		err := h.tpl.ExecuteTemplate(w, "404-page", pageData)
+		err = h.tpl.ExecuteTemplate(w, "404-page", pageData)
 		if err != nil {
 			panic(fmt.Errorf("failed to render login page template: %w", err))
 		}
@@ -51,11 +57,16 @@ func (h *Handler) HomePageHandler() http.Handler {
 			panic(fmt.Errorf("failed to list published posts: %w", err))
 		}
 
+		settings, err := h.settingRepo.Load(r.Context())
+		if err != nil {
+			panic(fmt.Errorf("failed to load settings: %w", err))
+		}
+
 		pageData := struct {
 			Settings service.Settings
-			Posts    service.PostList
+			Posts    []service.Post
 		}{
-			Settings: service.InMemorySettings,
+			Settings: *settings,
 			Posts:    publishedPostList,
 		}
 
@@ -83,12 +94,17 @@ func (h *Handler) SinglePostPageHandler() http.Handler {
 			return
 		}
 
+		settings, err := h.settingRepo.Load(r.Context())
+		if err != nil {
+			panic(fmt.Errorf("failed to load settings: %w", err))
+		}
+
 		pageData := struct {
 			Settings        service.Settings
 			Post            service.Post
 			IsAuthenticated bool
 		}{
-			Settings:        service.InMemorySettings,
+			Settings:        *settings,
 			Post:            *post,
 			IsAuthenticated: h.isAuthenticated(r),
 		}
@@ -102,13 +118,18 @@ func (h *Handler) SinglePostPageHandler() http.Handler {
 
 func (h *Handler) LoginPageHandler() http.Handler {
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		settings, err := h.settingRepo.Load(r.Context())
+		if err != nil {
+			panic(fmt.Errorf("failed to load settings: %w", err))
+		}
+
 		pageData := struct {
 			Settings service.Settings
 		}{
-			Settings: service.InMemorySettings,
+			Settings: *settings,
 		}
 
-		err := h.tpl.ExecuteTemplate(w, "login-page", pageData)
+		err = h.tpl.ExecuteTemplate(w, "login-page", pageData)
 		if err != nil {
 			panic(fmt.Errorf("failed to render login page template: %w", err))
 		}
@@ -197,11 +218,16 @@ func (h *Handler) AdminPostsPageHandler() http.Handler {
 			panic(fmt.Errorf("failed to list all posts: %w", err))
 		}
 
+		settings, err := h.settingRepo.Load(r.Context())
+		if err != nil {
+			panic(fmt.Errorf("failed to load settings: %w", err))
+		}
+
 		pageData := struct {
 			Settings service.Settings
-			Posts    service.PostList
+			Posts    []service.Post
 		}{
-			Settings: service.InMemorySettings,
+			Settings: *settings,
 			Posts:    allPostList,
 		}
 
@@ -216,13 +242,18 @@ func (h *Handler) AdminPostsPageHandler() http.Handler {
 
 func (h *Handler) AdminNewPostPageHandler() http.Handler {
 	hf := http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		settings, err := h.settingRepo.Load(r.Context())
+		if err != nil {
+			panic(fmt.Errorf("failed to load settings: %w", err))
+		}
+
 		pageData := struct {
 			Settings service.Settings
 		}{
-			Settings: service.InMemorySettings,
+			Settings: *settings,
 		}
 
-		err := h.tpl.ExecuteTemplate(w, "admin-new-post-page", pageData)
+		err = h.tpl.ExecuteTemplate(w, "admin-new-post-page", pageData)
 		if err != nil {
 			panic(fmt.Errorf("failed to render admin new post page template: %w", err))
 		}
@@ -236,10 +267,16 @@ func (h *Handler) AdminCreateNewPostHandler() http.Handler {
 		title := strings.TrimSpace(r.FormValue("title"))
 		slug := strings.TrimSpace(r.FormValue("slug"))
 		status := strings.TrimSpace(r.FormValue("status"))
-		publishedAtStr := strings.TrimSpace(r.FormValue("publishedAt"))
-		publishedAt, err := time.Parse(DateTimeLocalFormat, publishedAtStr)
-		if err != nil {
-			panic(fmt.Errorf("failed to parse published at: %w", err))
+
+		var publishedAt *time.Time
+		if status == service.PostStatusPublished {
+			publishedAtStr := strings.TrimSpace(r.FormValue("publishedAt"))
+			v, err := time.Parse(DateTimeLocalFormat, publishedAtStr)
+			if err != nil {
+				panic(fmt.Errorf("failed to parse published at: %w", err))
+			}
+
+			publishedAt = &v
 		}
 
 		excerpt := strings.TrimSpace(r.FormValue("excerpt"))
@@ -255,7 +292,7 @@ func (h *Handler) AdminCreateNewPostHandler() http.Handler {
 			Content:     template.HTML(content),
 		}
 
-		err = h.postRepo.Insert(r.Context(), &post)
+		err := h.postRepo.Insert(r.Context(), &post)
 		if err != nil {
 			panic(fmt.Errorf("failed to insert post: %w", err))
 		}
@@ -287,11 +324,16 @@ func (h *Handler) AdminEditPostPageHandler() http.Handler {
 			panic(fmt.Errorf("failed to get post: %w", err))
 		}
 
+		settings, err := h.settingRepo.Load(r.Context())
+		if err != nil {
+			panic(fmt.Errorf("failed to load settings: %w", err))
+		}
+
 		pageData := struct {
 			Settings service.Settings
 			Post     service.Post
 		}{
-			Settings: service.InMemorySettings,
+			Settings: *settings,
 			Post:     *post,
 		}
 
@@ -329,11 +371,17 @@ func (h *Handler) AdminUpdatePostHandler() http.Handler {
 		post.Slug = strings.TrimSpace(r.FormValue("slug"))
 		post.Status = service.PostStatus(strings.TrimSpace(r.FormValue("status")))
 
-		publishedAtStr := strings.TrimSpace(r.FormValue("publishedAt"))
-		publishedAt, err := time.Parse(DateTimeLocalFormat, publishedAtStr)
-		if err != nil {
-			panic(fmt.Errorf("failed to parse published at: %w", err))
+		var publishedAt *time.Time
+		if post.Status == service.PostStatusPublished {
+			publishedAtStr := strings.TrimSpace(r.FormValue("publishedAt"))
+			v, err := time.Parse(DateTimeLocalFormat, publishedAtStr)
+			if err != nil {
+				panic(fmt.Errorf("failed to parse published at: %w", err))
+			}
+
+			publishedAt = &v
 		}
+
 		post.PublishedAt = publishedAt
 
 		post.Excerpt = strings.TrimSpace(r.FormValue("excerpt"))
@@ -384,13 +432,18 @@ func (h *Handler) AdminDeletePostHandler() http.Handler {
 
 func (h *Handler) AdminSettingsPageHandler() http.Handler {
 	hf := http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		settings, err := h.settingRepo.Load(r.Context())
+		if err != nil {
+			panic(fmt.Errorf("failed to load settings: %w", err))
+		}
+
 		pageData := struct {
 			Settings service.Settings
 		}{
-			Settings: service.InMemorySettings,
+			Settings: *settings,
 		}
 
-		err := h.tpl.ExecuteTemplate(w, "admin-settings-page", pageData)
+		err = h.tpl.ExecuteTemplate(w, "admin-settings-page", pageData)
 		if err != nil {
 			panic(fmt.Errorf("failed to render admin settings page template: %w", err))
 		}
@@ -409,9 +462,19 @@ func (h *Handler) AdminUpdateSettingsHandler() http.Handler {
 			panic(fmt.Errorf("failed to load timezone name: %w", err))
 		}
 
-		service.InMemorySettings.Title = title
-		service.InMemorySettings.Tagline = tagline
-		service.InMemorySettings.TimeZone = timeZone
+		settings, err := h.settingRepo.Load(r.Context())
+		if err != nil {
+			panic(fmt.Errorf("failed to load settings: %w", err))
+		}
+
+		settings.Title = title
+		settings.Tagline = tagline
+		settings.TimeZone = timeZone
+
+		err = h.settingRepo.Save(r.Context(), settings)
+		if err != nil {
+			panic(fmt.Errorf("failed to update settings: %w", err))
+		}
 
 		h.AdminSettingsPageHandler().ServeHTTP(w, r)
 	})

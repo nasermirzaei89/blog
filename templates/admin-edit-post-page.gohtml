@@ -29,12 +29,12 @@
                     <div class="inline-flex gap-4">
                         <label for="status-draft" class="inline-flex gap-1 items-center">
                             <input type="radio" id="status-draft" name="status" value="draft"
-                                   {{ if eq .Post.Status "draft"}}checked{{end}} />
+                                   {{ if eq .Post.Status "draft"}}checked{{end}} required/>
                             <span>Draft</span>
                         </label>
                         <label for="status-published" class="inline-flex gap-1 items-center">
                             <input type="radio" id="status-published" name="status" value="published"
-                                   {{ if eq .Post.Status "published"}}checked{{end}} />
+                                   {{ if eq .Post.Status "published"}}checked{{end}} required/>
                             <span>Published</span>
                         </label>
                     </div>
@@ -42,7 +42,7 @@
                 <div class="flex flex-col items-start">
                     <label for="publishedAt">Published At</label>
                     <input type="datetime-local" id="publishedAt" name="publishedAt"
-                           value="{{formatDateTimeLocal .Post.PublishedAt}}"/>
+                           {{ if .Post.PublishedAt}}value="{{formatDateTimeLocal .Post.PublishedAt}}"{{end}}/>
                 </div>
                 <div class="flex flex-col items-start">
                     <label for="excerpt">Excerpt</label>

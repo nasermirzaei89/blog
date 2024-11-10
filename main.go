@@ -52,7 +52,10 @@ func main() {
 		panic(fmt.Errorf("failed to migrate database: %w", err))
 	}
 
-	postRepo := db.NewPostRepository(sqlDB)
+	var (
+		postRepo    = db.NewPostRepository(sqlDB)
+		settingRepo = db.NewSettingRepository(sqlDB)
+	)
 
 	h := Handler{
 		tpl:         fs,
@@ -60,6 +63,7 @@ func main() {
 		password:    password,
 		cookieStore: cookieStore,
 		postRepo:    postRepo,
+		settingRepo: settingRepo,
 	}
 
 	mux.Handle("GET /", h.HomePageHandler())

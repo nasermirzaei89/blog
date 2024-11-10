@@ -22,7 +22,7 @@ type Post struct {
 	Title       string
 	Slug        string
 	Status      PostStatus
-	PublishedAt time.Time
+	PublishedAt *time.Time
 	Excerpt     string
 	Content     template.HTML
 }
