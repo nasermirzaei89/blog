@@ -93,7 +93,7 @@ func (repo *PostRepository) GetBySlug(ctx context.Context, slug string) (*servic
 }
 
 func (repo *PostRepository) ListAll(ctx context.Context) ([]service.Post, error) {
-	q := squirrel.Select(repo.cols...).From(repo.table)
+	q := squirrel.Select(repo.cols...).From(repo.table).OrderBy("updated_at DESC")
 
 	rows, err := q.RunWith(repo.db).QueryContext(ctx)
 	if err != nil {
@@ -137,7 +137,9 @@ func (repo *PostRepository) ListAll(ctx context.Context) ([]service.Post, error)
 }
 
 func (repo *PostRepository) ListPublished(ctx context.Context) ([]service.Post, error) {
-	q := squirrel.Select(repo.cols...).From(repo.table).Where(squirrel.Eq{"status": service.PostStatusPublished})
+	q := squirrel.Select(repo.cols...).From(repo.table).
+		Where(squirrel.Eq{"status": service.PostStatusPublished}).
+		OrderBy("published_at DESC")
 
 	rows, err := q.RunWith(repo.db).QueryContext(ctx)
 	if err != nil {
