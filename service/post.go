@@ -35,6 +35,14 @@ func (err PostByUUIDNotFoundError) Error() string {
 	return fmt.Sprintf("post with UUID %s not found", err.UUID)
 }
 
+type PostBySlugNotFoundError struct {
+	Slug string
+}
+
+func (err PostBySlugNotFoundError) Error() string {
+	return fmt.Sprintf("post with slug %s not found", err.Slug)
+}
+
 type PostRepository interface {
 	Insert(ctx context.Context, post *Post) (err error)
 	Get(ctx context.Context, postUUID uuid.UUID) (post *Post, err error)

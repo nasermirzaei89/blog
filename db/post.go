@@ -82,6 +82,10 @@ func (repo *PostRepository) GetBySlug(ctx context.Context, slug string) (*servic
 		&post.Content,
 	)
 	if err != nil {
+		if errors.Is(err, sql.ErrNoRows) {
+			return nil, service.PostBySlugNotFoundError{Slug: slug}
+		}
+
 		return nil, fmt.Errorf("error on query db row: %w", err)
 	}
 

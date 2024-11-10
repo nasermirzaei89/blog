@@ -83,9 +83,14 @@ func (h *Handler) SinglePostPageHandler() http.Handler {
 
 		post, err := h.postRepo.GetBySlug(r.Context(), postSlug)
 		if err != nil {
-			h.NotFoundPageHandler()(w, r)
+			var postBySlugNotFoundError service.PostBySlugNotFoundError
+			if errors.As(err, &postBySlugNotFoundError) {
+				h.NotFoundPageHandler().ServeHTTP(w, r)
 
-			return
+				return
+			}
+
+			panic(fmt.Errorf("failed to get post: %w", err))
 		}
 
 		if post.Status != service.PostStatusPublished && !h.isAuthenticated(r) {
@@ -160,6 +165,7 @@ func (h *Handler) LoginHandler() http.Handler {
 			return
 		}
 
+		// TODO: show unauthorized message
 		w.WriteHeader(http.StatusUnauthorized)
 	})
 }
@@ -265,6 +271,8 @@ func (h *Handler) AdminNewPostPageHandler() http.Handler {
 func (h *Handler) AdminCreateNewPostHandler() http.Handler {
 	hf := http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		title := strings.TrimSpace(r.FormValue("title"))
+		// TODO: sanitize slug
+		// TODO: check slug is unique
 		slug := strings.TrimSpace(r.FormValue("slug"))
 		status := strings.TrimSpace(r.FormValue("status"))
 
@@ -273,6 +281,7 @@ func (h *Handler) AdminCreateNewPostHandler() http.Handler {
 			publishedAtStr := strings.TrimSpace(r.FormValue("publishedAt"))
 			v, err := time.Parse(DateTimeLocalFormat, publishedAtStr)
 			if err != nil {
+				// TODO: show invalid published at field
 				panic(fmt.Errorf("failed to parse published at: %w", err))
 			}
 
@@ -309,13 +318,14 @@ func (h *Handler) AdminEditPostPageHandler() http.Handler {
 
 		postUUID, err := uuid.Parse(postUUIDStr)
 		if err != nil {
+			// TODO: show error
 			panic(fmt.Errorf("failed to parse post uuid: %w", err))
 		}
 
 		post, err := h.postRepo.Get(r.Context(), postUUID)
 		if err != nil {
-			var postByUUIDNotFoundErr service.PostByUUIDNotFoundError
-			if errors.As(err, &postByUUIDNotFoundErr) {
+			var postByUUIDNotFoundError service.PostByUUIDNotFoundError
+			if errors.As(err, &postByUUIDNotFoundError) {
 				h.NotFoundPageHandler().ServeHTTP(w, r)
 
 				return
@@ -352,13 +362,14 @@ func (h *Handler) AdminUpdatePostHandler() http.Handler {
 
 		postUUID, err := uuid.Parse(postUUIDStr)
 		if err != nil {
+			// TODO: show error
 			panic(fmt.Errorf("failed to parse post uuid: %w", err))
 		}
 
 		post, err := h.postRepo.Get(r.Context(), postUUID)
 		if err != nil {
-			var postByUUIDNotFoundErr service.PostByUUIDNotFoundError
-			if errors.As(err, &postByUUIDNotFoundErr) {
+			var postByUUIDNotFoundError service.PostByUUIDNotFoundError
+			if errors.As(err, &postByUUIDNotFoundError) {
 				h.NotFoundPageHandler().ServeHTTP(w, r)
 
 				return
@@ -368,6 +379,8 @@ func (h *Handler) AdminUpdatePostHandler() http.Handler {
 		}
 
 		post.Title = strings.TrimSpace(r.FormValue("title"))
+		// TODO: sanitize slug
+		// TODO: check slug is unique
 		post.Slug = strings.TrimSpace(r.FormValue("slug"))
 		post.Status = service.PostStatus(strings.TrimSpace(r.FormValue("status")))
 
@@ -376,6 +389,7 @@ func (h *Handler) AdminUpdatePostHandler() http.Handler {
 			publishedAtStr := strings.TrimSpace(r.FormValue("publishedAt"))
 			v, err := time.Parse(DateTimeLocalFormat, publishedAtStr)
 			if err != nil {
+				// TODO: show error
 				panic(fmt.Errorf("failed to parse published at: %w", err))
 			}
 
@@ -404,13 +418,14 @@ func (h *Handler) AdminDeletePostHandler() http.Handler {
 
 		postUUID, err := uuid.Parse(postUUIDStr)
 		if err != nil {
+			// TODO: show error
 			panic(fmt.Errorf("failed to parse post uuid: %w", err))
 		}
 
 		_, err = h.postRepo.Get(r.Context(), postUUID)
 		if err != nil {
-			var postByUUIDNotFoundErr service.PostByUUIDNotFoundError
-			if errors.As(err, &postByUUIDNotFoundErr) {
+			var postByUUIDNotFoundError service.PostByUUIDNotFoundError
+			if errors.As(err, &postByUUIDNotFoundError) {
 				h.NotFoundPageHandler().ServeHTTP(w, r)
 
 				return
@@ -459,6 +474,7 @@ func (h *Handler) AdminUpdateSettingsHandler() http.Handler {
 		timeZoneName := strings.TrimSpace(r.FormValue("timezone"))
 		timeZone, err := time.LoadLocation(timeZoneName)
 		if err != nil {
+			// TODO: show error
 			panic(fmt.Errorf("failed to load timezone name: %w", err))
 		}
 
