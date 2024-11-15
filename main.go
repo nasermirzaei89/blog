@@ -31,7 +31,7 @@ func main() {
 	key := cmp.Or(os.Getenv("STORE_KEY"), "super-secret-key")
 	cookieStore := sessions.NewCookieStore([]byte(key))
 	cookieStore.Options = &sessions.Options{
-		Path:        "",
+		Path:        "/",
 		Domain:      "",
 		MaxAge:      0,
 		Secure:      false,

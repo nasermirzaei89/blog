@@ -1,0 +1,25 @@
+{{define "admin-messages"}}
+    <div id="admin-messages" class="container mx-auto p-4 flex flex-col gap-1">
+        {{range $index, $message := .}}
+            <div id="admin-message-{{$index}}" class="admin-message {{$message.Type}}">
+                <p>{{$message.Content}}</p>
+                <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" data-close-button
+                     data-close-target="#admin-message-{{$index}}" role="button">
+                    <title>close</title>
+                    <path d="M19,6.41L17.59,5L12,10.59L6.41,5L5,6.41L10.59,12L5,17.59L6.41,19L12,13.41L17.59,19L19,17.59L13.41,12L19,6.41Z"/>
+                </svg>
+            </div>
+        {{end}}
+    </div>
+    <script>
+        const adminMessages = document.getElementById("admin-messages")
+        const closeButtons = adminMessages.querySelectorAll("[data-close-button]")
+
+        closeButtons.forEach((closeButton) => {
+            const adminMessage = document.querySelector(closeButton.getAttribute("data-close-target"))
+            closeButton.addEventListener("click", () => {
+                adminMessage.remove();
+            })
+        })
+    </script>
+{{end}}

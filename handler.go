@@ -1,7 +1,9 @@
 package main
 
 import (
+	"bytes"
 	"cmp"
+	"encoding/gob"
 	"errors"
 	"fmt"
 	"github.com/google/uuid"
@@ -141,7 +143,76 @@ func (h *Handler) LoginPageHandler() http.Handler {
 	})
 }
 
-const sessionNameAuth = "auth"
+const (
+	sessionNameAuth          = "auth"
+	sessionNameAdminMessages = "adminMessages"
+)
+
+func (h *Handler) readMessages(r *http.Request, w http.ResponseWriter) []Message {
+	session, err := h.cookieStore.Get(r, sessionNameAdminMessages)
+	if err != nil {
+		panic(fmt.Errorf("failed to get session: %w", err))
+	}
+
+	iMessages, ok := session.Values["messages"]
+	if !ok {
+		return []Message{}
+	}
+
+	messagesStr, ok := iMessages.(string)
+	if !ok {
+		panic(fmt.Errorf("failed to convert session.Values[messages] to string: %w", err))
+	}
+
+	if messagesStr == "" {
+		return []Message{}
+	}
+
+	reader := strings.NewReader(messagesStr)
+	var messages []Message
+
+	err = gob.NewDecoder(reader).Decode(&messages)
+	if err != nil {
+		panic(fmt.Errorf("failed to decode message: %w", err))
+	}
+
+	if len(messages) == 0 {
+		return []Message{}
+	}
+
+	delete(session.Values, "messages")
+
+	err = session.Save(r, w)
+	if err != nil {
+		panic(fmt.Errorf("failed to save session: %w", err))
+	}
+
+	return messages
+}
+
+func (h *Handler) raiseMessage(r *http.Request, w http.ResponseWriter, message Message) {
+	messages := h.readMessages(r, w)
+
+	session, err := h.cookieStore.Get(r, sessionNameAdminMessages)
+	if err != nil {
+		panic(fmt.Errorf("failed to get session: %w", err))
+	}
+
+	messages = append(messages, message)
+
+	var buf bytes.Buffer
+	err = gob.NewEncoder(&buf).Encode(messages)
+	if err != nil {
+		panic(fmt.Errorf("failed to encode message: %w", err))
+	}
+
+	session.Values["messages"] = buf.String()
+
+	err = session.Save(r, w)
+	if err != nil {
+		panic(fmt.Errorf("failed to save session: %w", err))
+	}
+}
 
 func (h *Handler) LoginHandler() http.Handler {
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
@@ -155,7 +226,8 @@ func (h *Handler) LoginHandler() http.Handler {
 			}
 
 			session.Values["authenticated"] = true
-			err = sessions.Save(r, w)
+
+			err = session.Save(r, w)
 			if err != nil {
 				panic(fmt.Errorf("failed to save session: %w", err))
 			}
@@ -178,7 +250,8 @@ func (h *Handler) LogoutHandler() http.Handler {
 		}
 
 		session.Values["authenticated"] = false
-		err = sessions.Save(r, w)
+
+		err = session.Save(r, w)
 		if err != nil {
 			panic(fmt.Errorf("failed to save session: %w", err))
 		}
@@ -232,9 +305,11 @@ func (h *Handler) AdminPostsPageHandler() http.Handler {
 		pageData := struct {
 			Settings service.Settings
 			Posts    []service.Post
+			Messages []Message
 		}{
 			Settings: *settings,
 			Posts:    allPostList,
+			Messages: h.readMessages(r, w),
 		}
 
 		err = h.tpl.ExecuteTemplate(w, "admin-posts-page", pageData)
@@ -255,8 +330,10 @@ func (h *Handler) AdminNewPostPageHandler() http.Handler {
 
 		pageData := struct {
 			Settings service.Settings
+			Messages []Message
 		}{
 			Settings: *settings,
+			Messages: h.readMessages(r, w),
 		}
 
 		err = h.tpl.ExecuteTemplate(w, "admin-new-post-page", pageData)
@@ -311,6 +388,11 @@ func (h *Handler) AdminCreateNewPostHandler() http.Handler {
 			panic(fmt.Errorf("failed to insert post: %w", err))
 		}
 
+		h.raiseMessage(r, w, Message{
+			Type:    MessageTypeSuccess,
+			Content: "Post has been created successfully.",
+		})
+
 		http.Redirect(w, r, "/admin/posts/"+post.UUID.String()+"/edit", http.StatusFound)
 	})
 
@@ -323,8 +405,9 @@ func (h *Handler) AdminEditPostPageHandler() http.Handler {
 
 		postUUID, err := uuid.Parse(postUUIDStr)
 		if err != nil {
-			// TODO: show error
-			panic(fmt.Errorf("failed to parse post uuid: %w", err))
+			h.NotFoundPageHandler().ServeHTTP(w, r)
+
+			return
 		}
 
 		post, err := h.postRepo.Get(r.Context(), postUUID)
@@ -347,9 +430,11 @@ func (h *Handler) AdminEditPostPageHandler() http.Handler {
 		pageData := struct {
 			Settings service.Settings
 			Post     service.Post
+			Messages []Message
 		}{
 			Settings: *settings,
 			Post:     *post,
+			Messages: h.readMessages(r, w),
 		}
 
 		err = h.tpl.ExecuteTemplate(w, "admin-edit-post-page", pageData)
@@ -367,8 +452,9 @@ func (h *Handler) AdminUpdatePostHandler() http.Handler {
 
 		postUUID, err := uuid.Parse(postUUIDStr)
 		if err != nil {
-			// TODO: show error
-			panic(fmt.Errorf("failed to parse post uuid: %w", err))
+			h.NotFoundPageHandler().ServeHTTP(w, r)
+
+			return
 		}
 
 		post, err := h.postRepo.Get(r.Context(), postUUID)
@@ -417,6 +503,11 @@ func (h *Handler) AdminUpdatePostHandler() http.Handler {
 			panic(fmt.Errorf("failed to update post: %w", err))
 		}
 
+		h.raiseMessage(r, w, Message{
+			Type:    MessageTypeSuccess,
+			Content: "Post has been updated successfully.",
+		})
+
 		http.Redirect(w, r, "/admin/posts/"+post.UUID.String()+"/edit", http.StatusFound)
 	})
 
@@ -429,8 +520,9 @@ func (h *Handler) AdminDeletePostHandler() http.Handler {
 
 		postUUID, err := uuid.Parse(postUUIDStr)
 		if err != nil {
-			// TODO: show error
-			panic(fmt.Errorf("failed to parse post uuid: %w", err))
+			h.NotFoundPageHandler().ServeHTTP(w, r)
+
+			return
 		}
 
 		_, err = h.postRepo.Get(r.Context(), postUUID)
@@ -450,6 +542,11 @@ func (h *Handler) AdminDeletePostHandler() http.Handler {
 			panic(fmt.Errorf("failed to update post: %w", err))
 		}
 
+		h.raiseMessage(r, w, Message{
+			Type:    MessageTypeSuccess,
+			Content: "Post has been deleted successfully.",
+		})
+
 		http.Redirect(w, r, "/admin/posts", http.StatusFound)
 	})
 
@@ -466,9 +563,11 @@ func (h *Handler) AdminSettingsPageHandler() http.Handler {
 		pageData := struct {
 			Settings           service.Settings
 			AvailableTimeZones map[string][]string
+			Messages           []Message
 		}{
 			Settings:           *settings,
 			AvailableTimeZones: AvailableTimeZones,
+			Messages:           h.readMessages(r, w),
 		}
 
 		err = h.tpl.ExecuteTemplate(w, "admin-settings-page", pageData)
@@ -504,6 +603,11 @@ func (h *Handler) AdminUpdateSettingsHandler() http.Handler {
 		if err != nil {
 			panic(fmt.Errorf("failed to update settings: %w", err))
 		}
+
+		h.raiseMessage(r, w, Message{
+			Type:    MessageTypeSuccess,
+			Content: "Settings has been updated successfully.",
+		})
 
 		h.AdminSettingsPageHandler().ServeHTTP(w, r)
 	})
