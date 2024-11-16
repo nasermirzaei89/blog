@@ -65,12 +65,13 @@ func (h *Handler) HomePageHandler() http.Handler {
 		}
 
 		perPage := uint64(defaultPerPage)
-		if s := r.URL.Query().Get("perPage"); s != "" {
-			v, _ := strconv.Atoi(s)
-			if v > 1 {
-				perPage = uint64(v)
-			}
-		}
+		//TODO: enable with SEO considerations
+		//if s := r.URL.Query().Get("perPage"); s != "" {
+		//	v, _ := strconv.Atoi(s)
+		//	if v > 1 {
+		//		perPage = uint64(v)
+		//	}
+		//}
 
 		offset := (page - 1) * perPage
 
