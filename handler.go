@@ -11,6 +11,7 @@ import (
 	"github.com/nasermirzaei89/blog/service"
 	"html/template"
 	"net/http"
+	"strconv"
 	"strings"
 	"time"
 )
@@ -54,9 +55,38 @@ func (h *Handler) HomePageHandler() http.Handler {
 			return
 		}
 
-		publishedPostList, err := h.postRepo.ListPublished(r.Context())
+		page := uint64(1)
+		if s := r.URL.Query().Get("page"); s != "" {
+			// TODO: remove if page=1
+			v, _ := strconv.Atoi(s)
+			if v > 1 {
+				page = uint64(v)
+			}
+		}
+
+		perPage := uint64(defaultPerPage)
+		if s := r.URL.Query().Get("perPage"); s != "" {
+			v, _ := strconv.Atoi(s)
+			if v > 1 {
+				perPage = uint64(v)
+			}
+		}
+
+		offset := (page - 1) * perPage
+
+		req := service.ListPublishedRequest{Pagination: service.Pagination{
+			Offset: offset,
+			Limit:  perPage,
+		}}
+
+		publishedPostList, err := h.postRepo.ListPublished(r.Context(), req)
 		if err != nil {
 			panic(fmt.Errorf("failed to list published posts: %w", err))
+		}
+
+		totalPublishedPosts, err := h.postRepo.CountPublished(r.Context())
+		if err != nil {
+			panic(fmt.Errorf("failed to count published posts: %w", err))
 		}
 
 		settings, err := h.settingRepo.Load(r.Context())
@@ -64,12 +94,61 @@ func (h *Handler) HomePageHandler() http.Handler {
 			panic(fmt.Errorf("failed to load settings: %w", err))
 		}
 
+		var previousPageURL *string
+		if page > 1 {
+			q := r.URL.Query()
+
+			if page == 2 {
+				q.Del("page")
+			} else {
+				q.Set("page", fmt.Sprintf("%d", page-1))
+			}
+
+			if perPage == defaultPerPage {
+				q.Del("perPage")
+			}
+
+			u := r.URL
+			u.RawQuery = q.Encode()
+
+			us := u.String()
+			previousPageURL = &us
+		}
+
+		var nextPageURL *string
+		if totalPublishedPosts > offset+perPage {
+			q := r.URL.Query()
+
+			q.Set("page", fmt.Sprintf("%d", page+1))
+
+			if perPage == defaultPerPage {
+				q.Del("perPage")
+			}
+
+			u := r.URL
+			u.RawQuery = q.Encode()
+
+			us := u.String()
+			nextPageURL = &us
+		}
+
+		pagination := Pagination{
+			CurrentPage:     page,
+			PreviousPageURL: previousPageURL,
+			NextPageURL:     nextPageURL,
+			PerPage:         perPage,
+		}
+
 		pageData := struct {
-			Settings service.Settings
-			Posts    []service.Post
+			Settings        service.Settings
+			Posts           []service.Post
+			Pagination      Pagination
+			IsAuthenticated bool
 		}{
-			Settings: *settings,
-			Posts:    publishedPostList,
+			Settings:        *settings,
+			Posts:           publishedPostList,
+			Pagination:      pagination,
+			IsAuthenticated: h.isAuthenticated(r),
 		}
 
 		err = h.tpl.ExecuteTemplate(w, "home-page", pageData)

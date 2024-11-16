@@ -136,10 +136,10 @@ func (repo *PostRepository) ListAll(ctx context.Context) ([]service.Post, error)
 	return postList, nil
 }
 
-func (repo *PostRepository) ListPublished(ctx context.Context) ([]service.Post, error) {
+func (repo *PostRepository) ListPublished(ctx context.Context, req service.ListPublishedRequest) ([]service.Post, error) {
 	q := squirrel.Select(repo.cols...).From(repo.table).
 		Where(squirrel.Eq{"status": service.PostStatusPublished}).
-		OrderBy("published_at DESC")
+		OrderBy("published_at DESC").Offset(req.Pagination.Offset).Limit(req.Pagination.Limit)
 
 	rows, err := q.RunWith(repo.db).QueryContext(ctx)
 	if err != nil {
@@ -181,6 +181,19 @@ func (repo *PostRepository) ListPublished(ctx context.Context) ([]service.Post, 
 	}
 
 	return postList, nil
+}
+
+func (repo *PostRepository) CountPublished(ctx context.Context) (uint64, error) {
+	q := squirrel.Select("count(*)").From(repo.table).Where(squirrel.Eq{"status": service.PostStatusPublished})
+
+	var count uint64
+
+	err := q.RunWith(repo.db).QueryRowContext(ctx).Scan(&count)
+	if err != nil {
+		return 0, fmt.Errorf("error on query db row: %w", err)
+	}
+
+	return count, nil
 }
 
 func (repo *PostRepository) Replace(ctx context.Context, itemUUID uuid.UUID, post *service.Post) error {

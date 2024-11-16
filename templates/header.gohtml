@@ -2,5 +2,8 @@
     <header class="container mx-auto p-4">
         <h1>{{.Settings.Title}}</h1>
         <p>{{.Settings.Tagline}}</p>
+        {{ if .IsAuthenticated }}
+            <a href="/admin">Admin Dashboard</a>
+        {{end}}
     </header>
 {{end}}

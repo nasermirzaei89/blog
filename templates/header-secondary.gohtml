@@ -5,5 +5,8 @@
                 {{.Settings.Title}}
             </a>
         </h2>
+        {{ if .IsAuthenticated }}
+            <a href="/admin">Admin Dashboard</a>
+        {{end}}
     </header>
 {{end}}
