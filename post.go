@@ -17,6 +17,7 @@ type Post struct {
 	Slug      string
 	Excerpt   string
 	Content   template.HTML
+	AuthorID  string
 	CreatedAt time.Time
 	UpdatedAt time.Time
 }
@@ -75,7 +76,7 @@ func scanPost(rs squirrel.RowScanner) (*Post, error) {
 
 	var postCreatedAt, postUpdatedAt string
 
-	err := rs.Scan(&post.ID, &post.Title, &post.Slug, &post.Excerpt, &post.Content, &postCreatedAt, &postUpdatedAt)
+	err := rs.Scan(&post.ID, &post.Title, &post.Slug, &post.Excerpt, &post.Content, &post.AuthorID, &postCreatedAt, &postUpdatedAt)
 	if err != nil {
 		return nil, fmt.Errorf("error on scan row: %w", err)
 	}

@@ -1,0 +1,25 @@
+{{ template "page-header.gohtml" }}
+
+{{ template "header.gohtml" . }}
+
+<main>
+    <div class="flex flex-col gap-1">
+        <h1 class="text-3xl">
+            Logout
+        </h1>
+        <form method="POST" action="/logout" class="flex flex-col gap-2">
+            {{ .csrfField }}
+            <div>
+                Are you sure you want to log out?
+            </div>
+            <div class="flex flex-row gap-2">
+                <input type="submit" value="Sign Out" class="as-button">
+                <a href="/" class="as-button variant-plain">Cancel</a>
+            </div>
+        </form>
+    </div>
+</main>
+
+{{ template "footer.gohtml" }}
+
+{{ template "page-footer.gohtml" }}

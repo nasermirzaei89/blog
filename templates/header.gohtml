@@ -1,0 +1,20 @@
+<header>
+    <nav>
+        <a href="/" class="as-link">My Awesome Blog</a>
+
+        <ul>
+            {{ if .CurrentUser }}
+            <li>
+                <a href="/logout" class="as-link">Logout</a>
+            </li>
+            {{ else }}
+            <li>
+                <a href="/login" class="as-link">Login</a>
+            </li>
+            <li>
+                <a href="/register" class="as-link">Register</a>
+            </li>
+            {{ end }}
+        </ul>
+    </nav>
+</header>

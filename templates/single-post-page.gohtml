@@ -1,39 +1,19 @@
-<!DOCTYPE html>
-<html lang="{{ _lang }}" dir="{{ _dir }}">
+{{ template "page-header.gohtml" }}
 
-<head>
-    <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <link rel="icon" type="image/x-icon" href="/favicon.ico">
-    <title>Blog</title>
-    <script src="/scripts.min.js" defer></script>
-    <link rel="stylesheet" href="/style.min.css">
-    <link rel="stylesheet" href="/scripts.min.css">
-</head>
+{{ template "header.gohtml" . }}
 
-<body>
-
-    <header>
-        <div>My Awesome Blog</div>
-    </header>
-
-    <main>
-        <div class="flex flex-col gap-1">
-            <h1 class="text-3xl">
-                {{ .Post.Title }}
-            </h1>
-            <div class="prose dark:prose-invert">
-                {{ .Post.Content }}
-            </div>
-            <div class="text-sm italic">{{ formatTime .Post.CreatedAt "Jan _2, 2006" }}</div>
+<main>
+    <div class="flex flex-col gap-1">
+        <h1 class="text-3xl">
+            {{ .Post.Title }}
+        </h1>
+        <div class="prose dark:prose-invert">
+            {{ .Post.Content }}
         </div>
-    </main>
+        <div class="text-sm italic">{{ formatTime .Post.CreatedAt "Jan _2, 2006" }}</div>
+    </div>
+</main>
 
-    <footer>
-        <div class="inline-flex">
-            Made with <span class="as-icon size-6 mx-1">{{ template "mdi-language-go.svg" }}</span>
-        </div>
-    </footer>
-</body>
+{{ template "footer.gohtml" }}
 
-</html>
+{{ template "page-footer.gohtml" }}

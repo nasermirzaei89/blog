@@ -1,0 +1,1 @@
+CREDROPATE TABLE users;

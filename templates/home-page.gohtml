@@ -1,0 +1,42 @@
+{{ template "page-header.gohtml" }}
+
+<header>
+    <nav>
+        <h1>My Awesome Blog</h1>
+
+        <ul>
+            {{ if .CurrentUser }}
+            <li>
+                <a href="/logout" class="as-link">Logout</a>
+            </li>
+            {{ else }}
+            <li>
+                <a href="/login" class="as-link">Login</a>
+            </li>
+            <li>
+                <a href="/register" class="as-link">Register</a>
+            </li>
+            {{ end }}
+        </ul>
+    </nav>
+</header>
+
+<main>
+    <div role="list" class="flex flex-col gap-4">
+        {{ range .Posts }}
+        <div role="listitem" class="flex flex-col gap-1">
+            <h2 class="text-2xl">
+                <a href="/posts/{{ .Slug }}" class="as-link">{{ .Title }}</a>
+            </h2>
+            <div class="text-sm italic">{{ formatTime .CreatedAt "Jan _2, 2006" }}</div>
+            <div>
+                {{ .Excerpt }}
+            </div>
+        </div>
+        {{ end }}
+    </div>
+</main>
+
+{{ template "footer.gohtml" }}
+
+{{ template "page-footer.gohtml" }}

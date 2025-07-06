@@ -1,0 +1,36 @@
+{{ template "page-header.gohtml" }}
+
+{{ template "header.gohtml" }}
+
+<main>
+    <div class="flex flex-col gap-1">
+        <h1 class="text-3xl">
+            Login
+        </h1>
+        <form method="POST" action="/login" class="flex flex-col gap-2">
+            {{ .csrfField }}
+            <div class="as-text-field">
+                <label for="username">Username</label>
+                <input type="text" name="username" id="username" class="as-text-input" required>
+            </div>
+            <div class="as-text-field">
+                <label for="password">Password</label>
+                <input type="password" name="password" id="password" class="as-text-input" required>
+            </div>
+            <div>
+                <a href="/forgot-password" class="as-link">Forgot Password?</a>
+            </div>
+            <div>
+                <input type="submit" value="Sign In" class="as-button">
+            </div>
+            <div>
+                Don't have an account?
+                <a href="/register" class="as-link">Register</a>
+            </div>
+        </form>
+    </div>
+</main>
+
+{{ template "footer.gohtml" }}
+
+{{ template "page-footer.gohtml" }}

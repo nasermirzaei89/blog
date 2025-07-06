@@ -37,8 +37,11 @@ func main() {
 }
 
 func run(ctx context.Context) error {
+	_ = slog.SetLogLoggerLevel(slog.LevelDebug)
+
 	// Database
-	db, err := sql.Open("sqlite3", ":memory:")
+	dbDSN := env.GetString("DB_DSN", ":memory:")
+	db, err := sql.Open("sqlite3", dbDSN)
 	if err != nil {
 		return fmt.Errorf("error on open database: %w", err)
 	}
@@ -89,6 +92,12 @@ func run(ctx context.Context) error {
 
 	// Routes
 	mux.HandleFunc("GET /posts/{postSlug}", h.HandleViewPostPage)
+	mux.Handle("GET /login", h.HandleLoginPage())
+	mux.Handle("POST /login", h.HandleLogin())
+	mux.Handle("GET /register", h.HandleRegisterPage())
+	mux.Handle("POST /register", h.HandleRegister())
+	mux.Handle("GET /logout", h.HandleLogoutPage())
+	mux.Handle("POST /logout", h.HandleLogout())
 	mux.HandleFunc("GET /", h.HandleIndex)
 
 	// CSRF Middleware
@@ -97,7 +106,10 @@ func run(ctx context.Context) error {
 	// GZip Middleware
 	gzipMW := gziphandler.GzipHandler
 
-	handler := gzipMW(csrfMW(mux))
+	// Auth middleware
+	authMW := h.AuthMiddleware()
+
+	handler := gzipMW(csrfMW(h.RecoverMW(authMW(mux))))
 
 	// HTTP Server
 	host := env.GetString("HOST", "")
