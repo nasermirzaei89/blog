@@ -1,43 +1,115 @@
 package main
 
 import (
+	"context"
+	"database/sql"
 	"embed"
+	"fmt"
 	"html/template"
+	"io/fs"
+	"log/slog"
 	"net/http"
+	"os"
+	"time"
+
+	"github.com/NYTimes/gziphandler"
+	"github.com/gorilla/csrf"
+	"github.com/gorilla/sessions"
+	_ "github.com/joho/godotenv/autoload"
+	_ "github.com/mattn/go-sqlite3"
+	"github.com/nasermirzaei89/env"
 )
 
-//go:embed templates
+//go:embed templates/*
 var templates embed.FS
 
+//go:embed static/*
+var static embed.FS
+
 func main() {
-	tpl, err := template.ParseFS(templates, "templates/*.gohtml")
+	ctx := context.Background()
+
+	err := run(ctx)
 	if err != nil {
-		panic(err)
+		slog.ErrorContext(ctx, "failed to run application", "error", err)
+		os.Exit(1)
 	}
-
-	http.HandleFunc("/", func(rw http.ResponseWriter, r *http.Request) {
-		data := map[string]any{
-			"Posts": []Post{
-				{
-					Title: "Hello Web",
-					Date: "Jan 2, 2025",
-					Content: "Lorem Ipsum is simply dummy text of the printing and typesetting industry. Lorem Ipsum has been the industry's standard dummy text ever since the 1500s, when an unknown printer took a galley of type and scrambled it to make a type specimen book. It has survived not only five centuries, but also the leap into electronic typesetting, remaining essentially unchanged. It was popularised in the 1960s with the release of Letraset sheets containing Lorem Ipsum passages, and more recently with desktop publishing software like Aldus PageMaker including versions of Lorem Ipsum.",
-				},
-				{
-					Title: "Another Post",
-					Date: "Jan 3, 2025",
-					Content: `Contrary to popular belief, Lorem Ipsum is not simply random text. It has roots in a piece of classical Latin literature from 45 BC, making it over 2000 years old. Richard McClintock, a Latin professor at Hampden-Sydney College in Virginia, looked up one of the more obscure Latin words, consectetur, from a Lorem Ipsum passage, and going through the cites of the word in classical literature, discovered the undoubtable source. Lorem Ipsum comes from sections 1.10.32 and 1.10.33 of "de Finibus Bonorum et Malorum" (The Extremes of Good and Evil) by Cicero, written in 45 BC. This book is a treatise on the theory of ethics, very popular during the Renaissance. The first line of Lorem Ipsum, "Lorem ipsum dolor sit amet..", comes from a line in section 1.10.32.`,
-				},
-			},
-		}
-		tpl.ExecuteTemplate(rw, "index.gohtml", data)
-	})
-
-	http.ListenAndServe(":8080", nil)
 }
 
-type Post struct {
-	Title string
-	Date string
-	Content string
+func run(ctx context.Context) error {
+	// Database
+	db, err := sql.Open("sqlite3", ":memory:")
+	if err != nil {
+		return fmt.Errorf("error on open database: %w", err)
+	}
+
+	defer db.Close()
+
+	err = RunMigrations(ctx, db)
+	if err != nil {
+		return fmt.Errorf("error on run migrations: %w", err)
+	}
+
+	//
+	subStatic, err := fs.Sub(static, "static")
+	if err != nil {
+		return fmt.Errorf("failed to get static folder as sub: %w", err)
+	}
+
+	//
+	tmpl, err := template.New("").Funcs(template.FuncMap{
+		"formatTime": func(t time.Time, layout string) string {
+			return t.Format(layout)
+		},
+		"_lang": func() string {
+			return "en"
+		},
+		"_dir": func() string {
+			return "ltr"
+		},
+	}).ParseFS(templates, "templates/*.gohtml", "templates/icons/*.svg")
+	if err != nil {
+		return fmt.Errorf("error on parse templates: %w", err)
+	}
+
+	//
+	cookieStore := sessions.NewCookieStore([]byte(env.MustGetString("SESSION_KEY")))
+	sessionName := env.GetString("SESSION_NAME", "applicaset")
+
+	// HTTP Handler
+	h := &Handler{
+		static:      subStatic,
+		cookieStore: cookieStore,
+		sessionName: sessionName,
+		tmpl:        tmpl,
+		db:          db,
+	}
+
+	mux := http.NewServeMux()
+
+	// Routes
+	mux.HandleFunc("GET /posts/{postSlug}", h.HandleViewPostPage)
+	mux.HandleFunc("GET /", h.HandleIndex)
+
+	// CSRF Middleware
+	csrfMW := csrf.Protect([]byte(env.MustGetString("CSRF_AUTH_KEY")), csrf.TrustedOrigins([]string{"localhost:8080"}))
+
+	// GZip Middleware
+	gzipMW := gziphandler.GzipHandler
+
+	handler := gzipMW(csrfMW(mux))
+
+	// HTTP Server
+	host := env.GetString("HOST", "")
+	port := env.GetString("PORT", "8080")
+	address := host + ":" + port
+
+	slog.InfoContext(ctx, "starting server", "address", address)
+
+	err = http.ListenAndServe(address, handler)
+	if err != nil {
+		return fmt.Errorf("failed to start server: %w", err)
+	}
+
+	return nil
 }

@@ -1,0 +1,4 @@
+# Force Unix line endings even on Windows
+* text=auto eol=lf
+*.min.css -diff
+*.min.js -diff

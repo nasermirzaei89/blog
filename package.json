@@ -1,0 +1,16 @@
+{
+  "name": "blog",
+  "private": true,
+  "scripts": {
+    "build:js": "esbuild --bundle --minify --sourcemap --outfile=static/scripts.min.js --loader:.woff=file --loader:.woff2=file --asset-names=fonts/[name] scripts.js",
+    "build:css": "tailwindcss -i ./style.css -o ./static/style.min.css --minify"
+  },
+  "dependencies": {
+    "@fontsource/open-sans": "^5.2.5"
+  },
+  "devDependencies": {
+    "@tailwindcss/cli": "^4.1.6",
+    "@tailwindcss/typography": "^0.5.16",
+    "esbuild": "^0.25.4"
+  }
+}
