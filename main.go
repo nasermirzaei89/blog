@@ -86,7 +86,7 @@ func run(ctx context.Context) error {
 
 	//
 	cookieStore := sessions.NewCookieStore([]byte(env.MustGetString("SESSION_KEY")))
-	sessionName := env.GetString("SESSION_NAME", "applicaset")
+	sessionName := env.GetString("SESSION_NAME", "blog")
 
 	// HTTP Handler
 	h := &Handler{
