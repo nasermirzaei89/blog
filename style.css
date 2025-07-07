@@ -101,3 +101,17 @@ footer {
         @apply dark:text-gray-50;
     }
 }
+
+.as-textarea {
+    @apply border-2 border-gray-700 rounded-lg px-3 py-1 inline-flex text-gray-950 focus-within:outline-2 outline-gray-300 duration-100;
+    @apply dark:border-gray-300 dark:text-gray-50 dark:outline-gray-700;
+
+    textarea {
+        @apply focus:outline-none text-gray-950 w-full;
+        @apply dark:text-gray-50;
+    }
+
+    span {
+        @apply inline-flex items-center flex-nowrap;
+    }
+}

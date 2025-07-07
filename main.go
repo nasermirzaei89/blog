@@ -1,6 +1,7 @@
 package main
 
 import (
+	"cmp"
 	"context"
 	"database/sql"
 	"embed"
@@ -64,6 +65,9 @@ func run(ctx context.Context) error {
 		"formatTime": func(t time.Time, layout string) string {
 			return t.Format(layout)
 		},
+		"or": func(s1, s2 string) string {
+			return cmp.Or(s1, s2)
+		},
 		"_lang": func() string {
 			return "en"
 		},
@@ -98,6 +102,7 @@ func run(ctx context.Context) error {
 	mux.Handle("POST /register", h.HandleRegister())
 	mux.Handle("GET /logout", h.HandleLogoutPage())
 	mux.Handle("POST /logout", h.HandleLogout())
+	mux.Handle("POST /comments", h.HandleSubmitComment())
 	mux.HandleFunc("GET /", h.HandleIndex)
 
 	// CSRF Middleware

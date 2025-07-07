@@ -71,6 +71,19 @@ func GetPostBySlug(ctx context.Context, db *sql.DB, slug string) (*Post, error) 
 	return post, nil
 }
 
+func GetPostByID(ctx context.Context, db *sql.DB, id string) (*Post, error) {
+	q := squirrel.Select("*").From("posts").Where(squirrel.Eq{"id": id})
+
+	q = q.RunWith(db)
+
+	post, err := scanPost(q.QueryRowContext(ctx))
+	if err != nil {
+		return nil, fmt.Errorf("error on scan post: %w", err)
+	}
+
+	return post, nil
+}
+
 func scanPost(rs squirrel.RowScanner) (*Post, error) {
 	var post Post
 

@@ -79,10 +79,18 @@ func (h *Handler) AuthMiddleware() func(http.Handler) http.Handler {
 	}
 }
 
+func userFromContext(ctx context.Context) *User {
+	user, ok := ctx.Value(contextKeyUser).(*User)
+	if !ok {
+		return nil
+	}
+
+	return user
+}
+
 func (h *Handler) AuthenticatedOnly(next http.Handler) http.Handler {
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		_, ok := r.Context().Value(contextKeyUser).(*User)
-		if !ok {
+		if userFromContext(r.Context()) == nil {
 			http.Redirect(w, r, "/login", http.StatusSeeOther)
 			return
 		}
@@ -93,8 +101,7 @@ func (h *Handler) AuthenticatedOnly(next http.Handler) http.Handler {
 
 func (h *Handler) GuestOnly(next http.Handler) http.Handler {
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		_, ok := r.Context().Value(contextKeyUser).(*User)
-		if ok {
+		if userFromContext(r.Context()) != nil {
 			http.Redirect(w, r, "/", http.StatusSeeOther)
 			return
 		}
@@ -115,15 +122,6 @@ func (h *Handler) HandleIndex(w http.ResponseWriter, r *http.Request) {
 	}
 
 	h.HandleStatic(w, r)
-}
-
-func userFromContext(ctx context.Context) *User {
-	user, ok := ctx.Value(contextKeyUser).(*User)
-	if !ok {
-		return nil
-	}
-
-	return user
 }
 
 func (h *Handler) HandleHomePage(w http.ResponseWriter, r *http.Request) {
@@ -191,7 +189,6 @@ func (h *Handler) HandleLogin() http.Handler {
 			return
 		}
 
-		slog.Info("debug", user.PasswordHash, password)
 		err = bcrypt.CompareHashAndPassword([]byte(user.PasswordHash), []byte(password))
 		if err != nil {
 			http.Error(w, "invalid username or password", http.StatusUnauthorized)
@@ -398,10 +395,19 @@ func (h *Handler) HandleViewPostPage(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
+	comments, err := ListComments(r.Context(), h.db, ListCommentsParams{PostID: post.ID})
+	if err != nil {
+		slog.ErrorContext(r.Context(), "failed to post comments", "error", err)
+		http.Error(w, "failed to list post comments", http.StatusInternalServerError)
+		return
+	}
+
 	data := map[string]any{
-		"Post":        post,
-		"CurrentUser": userFromContext(r.Context()),
-		"CurrentPath": r.URL.Path,
+		csrf.TemplateTag: csrf.TemplateField(r),
+		"CurrentUser":    userFromContext(r.Context()),
+		"CurrentPath":    r.URL.Path,
+		"Post":           post,
+		"PostComments":   comments,
 	}
 
 	err = h.tmpl.ExecuteTemplate(w, "single-post-page.gohtml", data)
@@ -409,4 +415,52 @@ func (h *Handler) HandleViewPostPage(w http.ResponseWriter, r *http.Request) {
 		slog.ErrorContext(r.Context(), "failed to execute template", "error", err)
 		http.Error(w, "failed to execute template", http.StatusInternalServerError)
 	}
+}
+
+func (h *Handler) HandleSubmitComment() http.Handler {
+	hf := http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		err := r.ParseForm()
+		if err != nil {
+			slog.ErrorContext(r.Context(), "error on parse form", "error", err)
+			http.Error(w, "error on parse form", http.StatusInternalServerError)
+
+			return
+		}
+
+		postID := r.FormValue("postId")
+		content := r.FormValue("content")
+
+		user := userFromContext(r.Context())
+
+		post, err := GetPostByID(r.Context(), h.db, postID)
+		if err != nil {
+			slog.ErrorContext(r.Context(), "error on get post by id", "error", err, "postId", postID)
+			http.Error(w, "error on get post by id", http.StatusInternalServerError)
+
+			return
+		}
+
+		timeNow := time.Now()
+
+		comment := &Comment{
+			ID:        uuid.NewString(),
+			PostID:    postID,
+			UserID:    user.ID,
+			Content:   content,
+			CreatedAt: timeNow,
+			UpdatedAt: timeNow,
+		}
+
+		err = InsertComment(r.Context(), h.db, comment)
+		if err != nil {
+			slog.ErrorContext(r.Context(), "error on insert comment", "error", err)
+			http.Error(w, "error on insert comment", http.StatusInternalServerError)
+
+			return
+		}
+
+		http.Redirect(w, r, "/posts/"+post.Slug, http.StatusSeeOther)
+	})
+
+	return h.AuthenticatedOnly(hf)
 }

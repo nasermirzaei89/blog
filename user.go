@@ -54,7 +54,6 @@ func (err UserByUsernameNotFoundError) Error() string {
 }
 
 func GetUserByUsername(ctx context.Context, db *sql.DB, username string) (*User, error) {
-	slog.DebugContext(ctx, "GetUserByUsername", "username", username)
 	q := squirrel.Select("*").From("users").Where(squirrel.Eq{"username": username})
 
 	q = q.RunWith(db)
