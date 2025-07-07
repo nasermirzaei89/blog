@@ -22,12 +22,16 @@ type Comment struct {
 	UpdatedAt     time.Time
 }
 
-func InsertComment(ctx context.Context, db *sql.DB, comment *Comment) error {
+type CommentRepository struct {
+	db *sql.DB
+}
+
+func (repo *CommentRepository) Insert(ctx context.Context, comment *Comment) error {
 	q := squirrel.Insert("comments").
 		Columns("id", "post_id", "user_id", "content", "created_at", "updated_at").
 		Values(comment.ID, comment.PostID, comment.UserID, comment.Content, comment.CreatedAt.Format(time.RFC3339), comment.UpdatedAt.Format(time.RFC3339))
 
-	q = q.RunWith(db)
+	q = q.RunWith(repo.db)
 
 	_, err := q.ExecContext(ctx)
 	if err != nil {
@@ -64,7 +68,7 @@ type ListCommentsParams struct {
 	PostID string
 }
 
-func ListComments(ctx context.Context, db *sql.DB, params ListCommentsParams) ([]*Comment, error) {
+func (repo *CommentRepository) List(ctx context.Context, params ListCommentsParams) ([]*Comment, error) {
 	q := squirrel.Select(
 		"c.id",
 		"c.post_id",
@@ -81,7 +85,7 @@ func ListComments(ctx context.Context, db *sql.DB, params ListCommentsParams) ([
 		q = q.Where(squirrel.Eq{"c.post_id": params.PostID})
 	}
 
-	q = q.RunWith(db)
+	q = q.RunWith(repo.db)
 
 	rows, err := q.QueryContext(ctx)
 	if err != nil {

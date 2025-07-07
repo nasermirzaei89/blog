@@ -54,6 +54,11 @@ func run(ctx context.Context) error {
 		return fmt.Errorf("error on run migrations: %w", err)
 	}
 
+	// Repositories
+	userRepo := &UserRepository{db: db}
+	postRepo := &PostRepository{db: db}
+	commentRepo := &CommentRepository{db: db}
+
 	//
 	subStatic, err := fs.Sub(static, "static")
 	if err != nil {
@@ -89,7 +94,9 @@ func run(ctx context.Context) error {
 		cookieStore: cookieStore,
 		sessionName: sessionName,
 		tmpl:        tmpl,
-		db:          db,
+		userRepo:    userRepo,
+		postRepo:    postRepo,
+		commentRepo: commentRepo,
 	}
 
 	mux := http.NewServeMux()

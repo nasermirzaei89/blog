@@ -22,10 +22,14 @@ type Post struct {
 	UpdatedAt time.Time
 }
 
-func ListPosts(ctx context.Context, db *sql.DB) ([]*Post, error) {
+type PostRepository struct {
+	db *sql.DB
+}
+
+func (repo *PostRepository) List(ctx context.Context) ([]*Post, error) {
 	q := squirrel.Select("*").From("posts").OrderBy("created_at DESC")
 
-	q = q.RunWith(db)
+	q = q.RunWith(repo.db)
 
 	rows, err := q.QueryContext(ctx)
 	if err != nil {
@@ -58,10 +62,10 @@ func ListPosts(ctx context.Context, db *sql.DB) ([]*Post, error) {
 	return posts, nil
 }
 
-func GetPostBySlug(ctx context.Context, db *sql.DB, slug string) (*Post, error) {
+func (repo *PostRepository) GetBySlug(ctx context.Context, slug string) (*Post, error) {
 	q := squirrel.Select("*").From("posts").Where(squirrel.Eq{"slug": slug})
 
-	q = q.RunWith(db)
+	q = q.RunWith(repo.db)
 
 	post, err := scanPost(q.QueryRowContext(ctx))
 	if err != nil {
@@ -71,10 +75,10 @@ func GetPostBySlug(ctx context.Context, db *sql.DB, slug string) (*Post, error) 
 	return post, nil
 }
 
-func GetPostByID(ctx context.Context, db *sql.DB, id string) (*Post, error) {
+func (repo *PostRepository) GetByID(ctx context.Context, id string) (*Post, error) {
 	q := squirrel.Select("*").From("posts").Where(squirrel.Eq{"id": id})
 
-	q = q.RunWith(db)
+	q = q.RunWith(repo.db)
 
 	post, err := scanPost(q.QueryRowContext(ctx))
 	if err != nil {

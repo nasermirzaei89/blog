@@ -22,6 +22,10 @@ type User struct {
 	UpdatedAt    time.Time
 }
 
+type UserRepository struct {
+	db *sql.DB
+}
+
 func scanUser(rs squirrel.RowScanner) (*User, error) {
 	var user User
 
@@ -53,10 +57,10 @@ func (err UserByUsernameNotFoundError) Error() string {
 	return fmt.Sprintf("user by username '%s' not found", err.Username)
 }
 
-func GetUserByUsername(ctx context.Context, db *sql.DB, username string) (*User, error) {
+func (repo *UserRepository) GetByUsername(ctx context.Context, username string) (*User, error) {
 	q := squirrel.Select("*").From("users").Where(squirrel.Eq{"username": username})
 
-	q = q.RunWith(db)
+	q = q.RunWith(repo.db)
 
 	user, err := scanUser(q.QueryRowContext(ctx))
 	if err != nil {
@@ -75,7 +79,7 @@ type ListUsersParams struct {
 	EmailAddress string
 }
 
-func ListUsers(ctx context.Context, db *sql.DB, params ListUsersParams) ([]*User, error) {
+func (repo *UserRepository) List(ctx context.Context, params ListUsersParams) ([]*User, error) {
 	q := squirrel.Select("*").From("users")
 
 	if params.Username != "" {
@@ -86,7 +90,7 @@ func ListUsers(ctx context.Context, db *sql.DB, params ListUsersParams) ([]*User
 		q = q.Where(squirrel.Eq{"email_address": params.EmailAddress})
 	}
 
-	q = q.RunWith(db)
+	q = q.RunWith(repo.db)
 
 	rows, err := q.QueryContext(ctx)
 	if err != nil {
@@ -119,8 +123,8 @@ func ListUsers(ctx context.Context, db *sql.DB, params ListUsersParams) ([]*User
 	return users, nil
 }
 
-func HasUserByUsername(ctx context.Context, db *sql.DB, username string) (bool, error) {
-	users, err := ListUsers(ctx, db, ListUsersParams{Username: username})
+func (repo *UserRepository) ExistsByUsername(ctx context.Context, username string) (bool, error) {
+	users, err := repo.List(ctx, ListUsersParams{Username: username})
 	if err != nil {
 		return false, fmt.Errorf("error on list users by username: %w", err)
 	}
@@ -128,8 +132,8 @@ func HasUserByUsername(ctx context.Context, db *sql.DB, username string) (bool, 
 	return len(users) > 0, nil
 }
 
-func HasUserByEmailAddress(ctx context.Context, db *sql.DB, emailAddress string) (bool, error) {
-	users, err := ListUsers(ctx, db, ListUsersParams{EmailAddress: emailAddress})
+func (repo *UserRepository) ExistsByEmailAddress(ctx context.Context, emailAddress string) (bool, error) {
+	users, err := repo.List(ctx, ListUsersParams{EmailAddress: emailAddress})
 	if err != nil {
 		return false, fmt.Errorf("error on list users by emailAddress: %w", err)
 	}
@@ -137,12 +141,12 @@ func HasUserByEmailAddress(ctx context.Context, db *sql.DB, emailAddress string)
 	return len(users) > 0, nil
 }
 
-func InsertUser(ctx context.Context, db *sql.DB, user *User) error {
+func (repo *UserRepository) Insert(ctx context.Context, user *User) error {
 	q := squirrel.Insert("users").
 		Columns("id", "username", "email_address", "password_hash", "name", "avatar_url", "created_at", "updated_at").
 		Values(user.ID, user.Username, user.EmailAddress, user.PasswordHash, user.Name, user.AvatarURL, user.CreatedAt.Format(time.RFC3339), user.UpdatedAt.Format(time.RFC3339))
 
-	q = q.RunWith(db)
+	q = q.RunWith(repo.db)
 
 	_, err := q.ExecContext(ctx)
 	if err != nil {

@@ -2,7 +2,6 @@ package main
 
 import (
 	"context"
-	"database/sql"
 	"errors"
 	"html/template"
 	"io/fs"
@@ -21,7 +20,9 @@ type Handler struct {
 	cookieStore *sessions.CookieStore
 	sessionName string
 	tmpl        *template.Template
-	db          *sql.DB
+	userRepo    *UserRepository
+	postRepo    *PostRepository
+	commentRepo *CommentRepository
 }
 
 type contextKeyUserType struct{}
@@ -51,7 +52,7 @@ func (h *Handler) AuthMiddleware() func(http.Handler) http.Handler {
 			}
 
 			if username := session.Values["username"]; username != nil && username.(string) != "" {
-				user, err := GetUserByUsername(r.Context(), h.db, username.(string))
+				user, err := h.userRepo.GetByUsername(r.Context(), username.(string))
 				if err != nil {
 					if errors.As(err, &UserByUsernameNotFoundError{}) {
 						session.Values["username"] = nil
@@ -125,7 +126,7 @@ func (h *Handler) HandleIndex(w http.ResponseWriter, r *http.Request) {
 }
 
 func (h *Handler) HandleHomePage(w http.ResponseWriter, r *http.Request) {
-	posts, err := ListPosts(r.Context(), h.db)
+	posts, err := h.postRepo.List(r.Context())
 	if err != nil {
 		slog.ErrorContext(r.Context(), "failed to list posts", "error", err)
 		http.Error(w, "failed to list posts", http.StatusInternalServerError)
@@ -176,7 +177,7 @@ func (h *Handler) HandleLogin() http.Handler {
 		username := r.FormValue("username")
 		password := r.FormValue("password")
 
-		user, err := GetUserByUsername(r.Context(), h.db, username)
+		user, err := h.userRepo.GetByUsername(r.Context(), username)
 		if err != nil {
 			if errors.As(err, &UserByUsernameNotFoundError{}) {
 				http.Error(w, "invalid username or password", http.StatusUnauthorized)
@@ -260,10 +261,10 @@ func (h *Handler) HandleRegister() http.Handler {
 		}
 
 		// FIXME: what to do on security?
-		usernameExists, err := HasUserByUsername(r.Context(), h.db, username)
+		usernameExists, err := h.userRepo.ExistsByUsername(r.Context(), username)
 		if err != nil {
-			slog.ErrorContext(r.Context(), "error retrieving user by username", "error", err, "username", username)
-			http.Error(w, "error on retrieving user", http.StatusInternalServerError)
+			slog.ErrorContext(r.Context(), "error on checking user by username", "error", err, "username", username)
+			http.Error(w, "error on checking user", http.StatusInternalServerError)
 
 			return
 		}
@@ -275,10 +276,10 @@ func (h *Handler) HandleRegister() http.Handler {
 		}
 
 		// FIXME: what to do on security?
-		emailAddressExists, err := HasUserByEmailAddress(r.Context(), h.db, emailAddress)
+		emailAddressExists, err := h.userRepo.ExistsByEmailAddress(r.Context(), emailAddress)
 		if err != nil {
-			slog.ErrorContext(r.Context(), "error retrieving user by email address", "error", err, "emailAddress", emailAddress)
-			http.Error(w, "error on retrieving user", http.StatusInternalServerError)
+			slog.ErrorContext(r.Context(), "error on checking user by email address", "error", err, "emailAddress", emailAddress)
+			http.Error(w, "error on checking user", http.StatusInternalServerError)
 
 			return
 		}
@@ -310,7 +311,7 @@ func (h *Handler) HandleRegister() http.Handler {
 			UpdatedAt:    timeNow,
 		}
 
-		err = InsertUser(r.Context(), h.db, user)
+		err = h.userRepo.Insert(r.Context(), user)
 		if err != nil {
 			slog.ErrorContext(r.Context(), "error on insert user", "error", err)
 			http.Error(w, "error on insert user", http.StatusInternalServerError)
@@ -388,14 +389,14 @@ func (h *Handler) HandleLogout() http.Handler {
 
 func (h *Handler) HandleViewPostPage(w http.ResponseWriter, r *http.Request) {
 	postSlug := r.PathValue("postSlug")
-	post, err := GetPostBySlug(r.Context(), h.db, postSlug)
+	post, err := h.postRepo.GetBySlug(r.Context(), postSlug)
 	if err != nil {
 		slog.ErrorContext(r.Context(), "failed to list posts", "error", err)
 		http.Error(w, "failed to list posts", http.StatusInternalServerError)
 		return
 	}
 
-	comments, err := ListComments(r.Context(), h.db, ListCommentsParams{PostID: post.ID})
+	comments, err := h.commentRepo.List(r.Context(), ListCommentsParams{PostID: post.ID})
 	if err != nil {
 		slog.ErrorContext(r.Context(), "failed to post comments", "error", err)
 		http.Error(w, "failed to list post comments", http.StatusInternalServerError)
@@ -432,7 +433,7 @@ func (h *Handler) HandleSubmitComment() http.Handler {
 
 		user := userFromContext(r.Context())
 
-		post, err := GetPostByID(r.Context(), h.db, postID)
+		post, err := h.postRepo.GetByID(r.Context(), postID)
 		if err != nil {
 			slog.ErrorContext(r.Context(), "error on get post by id", "error", err, "postId", postID)
 			http.Error(w, "error on get post by id", http.StatusInternalServerError)
@@ -451,7 +452,7 @@ func (h *Handler) HandleSubmitComment() http.Handler {
 			UpdatedAt: timeNow,
 		}
 
-		err = InsertComment(r.Context(), h.db, comment)
+		err = h.commentRepo.Insert(r.Context(), comment)
 		if err != nil {
 			slog.ErrorContext(r.Context(), "error on insert comment", "error", err)
 			http.Error(w, "error on insert comment", http.StatusInternalServerError)
