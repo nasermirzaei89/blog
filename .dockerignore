@@ -1,0 +1,6 @@
+bin/
+blog.db
+node_modules/
+.env
+.git
+.gitignore
