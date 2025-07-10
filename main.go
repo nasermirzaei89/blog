@@ -33,17 +33,19 @@ const (
 )
 
 func main() {
-	ctx := context.Background()
+	slog.Info("starting app...")
 
-	err := run(ctx)
+	err := run()
 	if err != nil {
-		slog.ErrorContext(ctx, "failed to run application", "error", err)
+		slog.Error("failed to run application", "error", err)
 		os.Exit(1)
 	}
+
+	slog.Info("app ran successfully")
 }
 
-func run(ctx context.Context) error {
-	ctx, stop := signal.NotifyContext(ctx, os.Interrupt)
+func run() error {
+	ctx, stop := signal.NotifyContext(context.Background(), os.Interrupt)
 	defer stop()
 
 	// Database
@@ -164,13 +166,16 @@ func run(ctx context.Context) error {
 	case err = <-serverErr:
 		return err
 	case <-ctx.Done():
-		stop()
-	}
+		slog.Info("interrupt signal received")
+		slog.Info("shutting down server gracefully...")
 
-	// When Shutdown is called, ListenAndServe immediately returns ErrServerClosed.
-	err = server.Shutdown(context.Background())
-	if err != nil {
-		return fmt.Errorf("error shutting down server: %w", err)
+		shutdownCtx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+		defer cancel()
+
+		err = server.Shutdown(shutdownCtx)
+		if err != nil {
+			return fmt.Errorf("error shutting down server: %w", err)
+		}
 	}
 
 	return nil
