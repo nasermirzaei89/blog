@@ -112,21 +112,41 @@ func (repo *UserRepository) List(ctx context.Context, params ListUsersParams) ([
 }
 
 func (repo *UserRepository) ExistsByUsername(ctx context.Context, username string) (bool, error) {
-	users, err := repo.List(ctx, ListUsersParams{Username: username})
+	q := squirrel.Select("1").From("users").Where(squirrel.Eq{"username": username})
+
+	q = q.RunWith(repo.db)
+
+	var dummy int
+
+	err := q.QueryRowContext(ctx).Scan(&dummy)
 	if err != nil {
-		return false, fmt.Errorf("error on list users by username: %w", err)
+		if errors.Is(err, sql.ErrNoRows) {
+			return false, nil
+		}
+
+		return false, fmt.Errorf("error on scan user: %w", err)
 	}
 
-	return len(users) > 0, nil
+	return true, nil
 }
 
 func (repo *UserRepository) ExistsByEmailAddress(ctx context.Context, emailAddress string) (bool, error) {
-	users, err := repo.List(ctx, ListUsersParams{EmailAddress: emailAddress})
+	q := squirrel.Select("1").From("users").Where(squirrel.Eq{"email_address": emailAddress})
+
+	q = q.RunWith(repo.db)
+
+	var dummy int
+
+	err := q.QueryRowContext(ctx).Scan(&dummy)
 	if err != nil {
-		return false, fmt.Errorf("error on list users by emailAddress: %w", err)
+		if errors.Is(err, sql.ErrNoRows) {
+			return false, nil
+		}
+
+		return false, fmt.Errorf("error on scan user: %w", err)
 	}
 
-	return len(users) > 0, nil
+	return true, nil
 }
 
 func (repo *UserRepository) Insert(ctx context.Context, user *User) error {
