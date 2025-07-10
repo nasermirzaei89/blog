@@ -37,6 +37,12 @@ func RunMigrations(ctx context.Context, db *sql.DB) error {
 		return fmt.Errorf("migration failed: %w", err)
 	}
 
-	slog.InfoContext(ctx, "migration applied successfully")
+	version, dirty, err := m.Version()
+	if err != nil {
+		return fmt.Errorf("failed to get current active migration version: %w", err)
+	}
+
+	slog.InfoContext(ctx, "migration applied successfully", "version", version, "dirty", dirty)
+
 	return nil
 }

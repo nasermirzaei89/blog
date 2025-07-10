@@ -119,7 +119,7 @@ func run(ctx context.Context) error {
 	mux.HandleFunc("GET /", h.HandleIndex)
 
 	// CSRF Middleware
-	csrfMW := csrf.Protect([]byte(env.MustGetString("CSRF_AUTH_KEY")), csrf.TrustedOrigins([]string{"localhost:8080"}))
+	csrfMW := csrf.Protect([]byte(env.MustGetString("CSRF_AUTH_KEY")), csrf.TrustedOrigins(env.GetStringSlice("CSRF_TRUSTED_ORIGINS", []string{"localhost:8080"})))
 
 	// GZip Middleware
 	gzipMW := gziphandler.GzipHandler

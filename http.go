@@ -7,6 +7,7 @@ import (
 	"io/fs"
 	"log/slog"
 	"net/http"
+	"runtime/debug"
 	"time"
 
 	"github.com/google/uuid"
@@ -35,7 +36,7 @@ func (h *Handler) RecoverMW(next http.Handler) http.Handler {
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		defer func() {
 			if err := recover(); err != nil {
-				slog.ErrorContext(r.Context(), "recovered from panic", "error", err)
+				slog.ErrorContext(r.Context(), "recovered from panic", "error", err, "stack", debug.Stack())
 				http.Error(w, "internal error occured", http.StatusInternalServerError)
 			}
 		}()
