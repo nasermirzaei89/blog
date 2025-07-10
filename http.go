@@ -8,6 +8,7 @@ import (
 	"log/slog"
 	"net/http"
 	"runtime/debug"
+	"sync/atomic"
 	"time"
 
 	"github.com/google/uuid"
@@ -18,14 +19,15 @@ import (
 )
 
 type Handler struct {
-	static      fs.FS
-	cookieStore *sessions.CookieStore
-	sessionName string
-	tmpl        *template.Template
-	userRepo    *UserRepository
-	postRepo    *PostRepository
-	commentRepo *CommentRepository
-	htmlPolicy  *bluemonday.Policy
+	static         fs.FS
+	cookieStore    *sessions.CookieStore
+	sessionName    string
+	tmpl           *template.Template
+	userRepo       *UserRepository
+	postRepo       *PostRepository
+	commentRepo    *CommentRepository
+	htmlPolicy     *bluemonday.Policy
+	isShuttingDown atomic.Bool
 }
 
 type contextKeyUserType struct{}
@@ -126,6 +128,15 @@ func (h *Handler) HandleIndex(w http.ResponseWriter, r *http.Request) {
 	}
 
 	h.HandleStatic(w, r)
+}
+
+func (h *Handler) HandleHealthz(w http.ResponseWriter, r *http.Request) {
+	if h.isShuttingDown.Load() {
+		http.Error(w, "Shutting down", http.StatusServiceUnavailable)
+		return
+	}
+
+	w.Write([]byte("OK"))
 }
 
 func (h *Handler) HandleHomePage(w http.ResponseWriter, r *http.Request) {

@@ -10,7 +10,6 @@ import (
 	"html/template"
 	"io/fs"
 	"log/slog"
-	"net"
 	"net/http"
 	"os"
 	"os/signal"
@@ -45,7 +44,7 @@ func main() {
 }
 
 func run() error {
-	ctx, stop := signal.NotifyContext(context.Background(), os.Interrupt)
+	rootCtx, stop := signal.NotifyContext(context.Background(), os.Interrupt)
 	defer stop()
 
 	// Database
@@ -59,7 +58,7 @@ func run() error {
 		err = errors.Join(err, db.Close())
 	}()
 
-	err = RunMigrations(ctx, db)
+	err = RunMigrations(rootCtx, db)
 	if err != nil {
 		return fmt.Errorf("error on run migrations: %w", err)
 	}
@@ -125,6 +124,7 @@ func run() error {
 	mux.Handle("POST /comments/{commentId}/edit", h.HandleEditComment())
 	mux.Handle("GET /comments/{commentId}/delete", h.HandleDeleteCommentPage())
 	mux.Handle("POST /comments/{commentId}/delete", h.HandleDeleteComment())
+	mux.HandleFunc("GET /healthz", h.HandleHealthz)
 	mux.HandleFunc("GET /", h.HandleIndex)
 
 	// CSRF Middleware
@@ -150,13 +150,12 @@ func run() error {
 		ReadHeaderTimeout: HTTPServerTimeOut,
 		WriteTimeout:      HTTPServerTimeOut,
 		IdleTimeout:       HTTPServerTimeOut,
-		BaseContext:       func(_ net.Listener) context.Context { return ctx },
 	}
 
 	serverErr := make(chan error, 1)
 
 	go func() {
-		slog.InfoContext(ctx, "starting server", "address", address)
+		slog.InfoContext(rootCtx, "starting server", "address", address)
 
 		serverErr <- server.ListenAndServe()
 	}()
@@ -165,9 +164,10 @@ func run() error {
 	select {
 	case err = <-serverErr:
 		return err
-	case <-ctx.Done():
+	case <-rootCtx.Done():
 		slog.Info("interrupt signal received")
 		slog.Info("shutting down server gracefully...")
+		h.isShuttingDown.Store(true)
 
 		shutdownCtx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
 		defer cancel()
