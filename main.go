@@ -5,12 +5,15 @@ import (
 	"context"
 	"database/sql"
 	"embed"
+	"errors"
 	"fmt"
 	"html/template"
 	"io/fs"
 	"log/slog"
+	"net"
 	"net/http"
 	"os"
+	"os/signal"
 	"time"
 
 	"github.com/NYTimes/gziphandler"
@@ -22,11 +25,12 @@ import (
 	"github.com/nasermirzaei89/env"
 )
 
-//go:embed templates/*
-var templates embed.FS
+//go:embed templates/* static/*
+var embeddedFS embed.FS
 
-//go:embed static/*
-var static embed.FS
+const (
+	HTTPServerTimeOut = 60 * time.Second
+)
 
 func main() {
 	ctx := context.Background()
@@ -39,7 +43,8 @@ func main() {
 }
 
 func run(ctx context.Context) error {
-	_ = slog.SetLogLoggerLevel(slog.LevelDebug)
+	ctx, stop := signal.NotifyContext(ctx, os.Interrupt)
+	defer stop()
 
 	// Database
 	dbDSN := env.GetString("DB_DSN", ":memory:")
@@ -48,7 +53,9 @@ func run(ctx context.Context) error {
 		return fmt.Errorf("error on open database: %w", err)
 	}
 
-	defer db.Close()
+	defer func() {
+		err = errors.Join(err, db.Close())
+	}()
 
 	err = RunMigrations(ctx, db)
 	if err != nil {
@@ -61,7 +68,7 @@ func run(ctx context.Context) error {
 	commentRepo := &CommentRepository{db: db}
 
 	//
-	subStatic, err := fs.Sub(static, "static")
+	static, err := fs.Sub(embeddedFS, "static")
 	if err != nil {
 		return fmt.Errorf("failed to get static folder as sub: %w", err)
 	}
@@ -80,7 +87,7 @@ func run(ctx context.Context) error {
 		"_dir": func() string {
 			return "ltr"
 		},
-	}).ParseFS(templates, "templates/*.gohtml", "templates/icons/*.svg")
+	}).ParseFS(embeddedFS, "templates/*.gohtml", "templates/icons/*.svg")
 	if err != nil {
 		return fmt.Errorf("error on parse templates: %w", err)
 	}
@@ -91,7 +98,7 @@ func run(ctx context.Context) error {
 
 	// HTTP Handler
 	h := &Handler{
-		static:      subStatic,
+		static:      static,
 		cookieStore: cookieStore,
 		sessionName: sessionName,
 		tmpl:        tmpl,
@@ -134,11 +141,36 @@ func run(ctx context.Context) error {
 	port := env.GetString("PORT", "8080")
 	address := host + ":" + port
 
-	slog.InfoContext(ctx, "starting server", "address", address)
+	server := http.Server{
+		Addr:              address,
+		Handler:           handler,
+		ReadTimeout:       HTTPServerTimeOut,
+		ReadHeaderTimeout: HTTPServerTimeOut,
+		WriteTimeout:      HTTPServerTimeOut,
+		IdleTimeout:       HTTPServerTimeOut,
+		BaseContext:       func(_ net.Listener) context.Context { return ctx },
+	}
 
-	err = http.ListenAndServe(address, handler)
+	serverErr := make(chan error, 1)
+
+	go func() {
+		slog.InfoContext(ctx, "starting server", "address", address)
+
+		serverErr <- server.ListenAndServe()
+	}()
+
+	// Wait for interruption.
+	select {
+	case err = <-serverErr:
+		return err
+	case <-ctx.Done():
+		stop()
+	}
+
+	// When Shutdown is called, ListenAndServe immediately returns ErrServerClosed.
+	err = server.Shutdown(context.Background())
 	if err != nil {
-		return fmt.Errorf("failed to start server: %w", err)
+		return fmt.Errorf("error shutting down server: %w", err)
 	}
 
 	return nil
