@@ -24,7 +24,12 @@
                 </div>
                 <div>
                     <div class="text-sm">{{ .UserName }}</div>
-                    <div class="text-xs">{{ formatTime .CreatedAt "Jan _2, 2006" }}</div>
+                    <div class="text-xs">
+                        {{ formatTime .CreatedAt "Jan _2, 2006" }}
+                        {{ if ne .CreatedAt .UpdatedAt }}
+                        <span title="Edited on {{ formatTime .UpdatedAt "Jan _2, 2006" }}">(Edited)</span>
+                        {{ end }}
+                    </div>
                 </div>
             </div>
             <div>

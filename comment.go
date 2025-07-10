@@ -105,3 +105,59 @@ func (repo *CommentRepository) List(ctx context.Context, params ListCommentsPara
 
 	return comments, nil
 }
+
+func (repo *CommentRepository) GetByID(ctx context.Context, id string) (*Comment, error) {
+	q := squirrel.Select(
+		"c.id",
+		"c.post_id",
+		"c.user_id",
+		"u.username",
+		"u.name",
+		"u.avatar_url",
+		"c.content",
+		"c.created_at",
+		"c.updated_at",
+	).From("comments c").Join("users u ON c.user_id = u.id").Where(squirrel.Eq{"c.id": id})
+
+	q = q.RunWith(repo.db)
+
+	comment, err := scanComment(q.QueryRowContext(ctx))
+	if err != nil {
+		return nil, fmt.Errorf("error on scan comment: %w", err)
+	}
+
+	return comment, nil
+}
+
+func (repo *CommentRepository) Replace(ctx context.Context, id string, comment *Comment) error {
+	q := squirrel.Update("comments").SetMap(map[string]any{
+		"id":         comment.ID,
+		"post_id":    comment.PostID,
+		"user_id":    comment.UserID,
+		"content":    comment.Content,
+		"created_at": comment.CreatedAt,
+		"updated_at": comment.UpdatedAt,
+	}).Where(squirrel.Eq{"id": id})
+
+	q = q.RunWith(repo.db)
+
+	_, err := q.ExecContext(ctx)
+	if err != nil {
+		return fmt.Errorf("error on exec query: %w", err)
+	}
+
+	return nil
+}
+
+func (repo *CommentRepository) Delete(ctx context.Context, id string) error {
+	q := squirrel.Delete("comments").Where(squirrel.Eq{"id": id})
+
+	q = q.RunWith(repo.db)
+
+	_, err := q.ExecContext(ctx)
+	if err != nil {
+		return fmt.Errorf("error on exec query: %w", err)
+	}
+
+	return nil
+}

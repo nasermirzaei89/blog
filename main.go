@@ -110,6 +110,10 @@ func run(ctx context.Context) error {
 	mux.Handle("GET /logout", h.HandleLogoutPage())
 	mux.Handle("POST /logout", h.HandleLogout())
 	mux.Handle("POST /comments", h.HandleSubmitComment())
+	mux.Handle("GET /comments/{commentId}/edit", h.HandleEditCommentPage())
+	mux.Handle("POST /comments/{commentId}/edit", h.HandleEditComment())
+	mux.Handle("GET /comments/{commentId}/delete", h.HandleDeleteCommentPage())
+	mux.Handle("POST /comments/{commentId}/delete", h.HandleDeleteComment())
 	mux.HandleFunc("GET /", h.HandleIndex)
 
 	// CSRF Middleware

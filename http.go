@@ -465,3 +465,172 @@ func (h *Handler) HandleSubmitComment() http.Handler {
 
 	return h.AuthenticatedOnly(hf)
 }
+
+func (h *Handler) HandleEditCommentPage() http.Handler {
+	hf := http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		commentID := r.PathValue("commentId")
+		comment, err := h.commentRepo.GetByID(r.Context(), commentID)
+		if err != nil {
+			slog.ErrorContext(r.Context(), "error on get comment by id", "error", err, "commentId", commentID)
+			http.Error(w, "error on get comment by id", http.StatusInternalServerError)
+
+			return
+		}
+
+		user := userFromContext(r.Context())
+
+		if comment.UserID != user.ID {
+			http.Error(w, "cannot edit comment", http.StatusForbidden)
+
+			return
+		}
+
+		data := map[string]any{
+			csrf.TemplateTag: csrf.TemplateField(r),
+			"CurrentUser":    userFromContext(r.Context()),
+			"CurrentPath":    r.URL.Path,
+			"Comment":        comment,
+		}
+
+		err = h.tmpl.ExecuteTemplate(w, "edit-comment-page.gohtml", data)
+		if err != nil {
+			slog.ErrorContext(r.Context(), "failed to execute template", "error", err)
+			http.Error(w, "failed to execute template", http.StatusInternalServerError)
+		}
+	})
+
+	return h.AuthenticatedOnly(hf)
+}
+
+func (h *Handler) HandleEditComment() http.Handler {
+	hf := http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		commentID := r.PathValue("commentId")
+
+		err := r.ParseForm()
+		if err != nil {
+			slog.ErrorContext(r.Context(), "error on parse form", "error", err)
+			http.Error(w, "error on parse form", http.StatusInternalServerError)
+
+			return
+		}
+
+		content := r.FormValue("content")
+
+		comment, err := h.commentRepo.GetByID(r.Context(), commentID)
+		if err != nil {
+			slog.ErrorContext(r.Context(), "error on get comment by id", "error", err, "commentId", commentID)
+			http.Error(w, "error on get comment by id", http.StatusInternalServerError)
+
+			return
+		}
+
+		user := userFromContext(r.Context())
+
+		if comment.UserID != user.ID {
+			http.Error(w, "cannot edit comment", http.StatusForbidden)
+
+			return
+		}
+
+		comment.Content = content
+		comment.UpdatedAt = time.Now()
+
+		err = h.commentRepo.Replace(r.Context(), commentID, comment)
+		if err != nil {
+			slog.ErrorContext(r.Context(), "error on replace comment", "error", err)
+			http.Error(w, "error on replace comment", http.StatusInternalServerError)
+
+			return
+		}
+
+		post, err := h.postRepo.GetByID(r.Context(), comment.PostID)
+		if err != nil {
+			slog.ErrorContext(r.Context(), "error on get post by id", "error", err, "postId", comment.PostID)
+			http.Error(w, "error on get post by id", http.StatusInternalServerError)
+
+			return
+		}
+
+		http.Redirect(w, r, "/posts/"+post.Slug, http.StatusSeeOther)
+	})
+
+	return h.AuthenticatedOnly(hf)
+}
+
+func (h *Handler) HandleDeleteCommentPage() http.Handler {
+	hf := http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		commentID := r.PathValue("commentId")
+		comment, err := h.commentRepo.GetByID(r.Context(), commentID)
+		if err != nil {
+			slog.ErrorContext(r.Context(), "error on get comment by id", "error", err, "commentId", commentID)
+			http.Error(w, "error on get comment by id", http.StatusInternalServerError)
+
+			return
+		}
+
+		user := userFromContext(r.Context())
+
+		if comment.UserID != user.ID {
+			http.Error(w, "cannot delete comment", http.StatusForbidden)
+
+			return
+		}
+
+		data := map[string]any{
+			csrf.TemplateTag: csrf.TemplateField(r),
+			"CurrentUser":    userFromContext(r.Context()),
+			"CurrentPath":    r.URL.Path,
+			"Comment":        comment,
+		}
+
+		err = h.tmpl.ExecuteTemplate(w, "delete-comment-page.gohtml", data)
+		if err != nil {
+			slog.ErrorContext(r.Context(), "failed to execute template", "error", err)
+			http.Error(w, "failed to execute template", http.StatusInternalServerError)
+		}
+	})
+
+	return h.AuthenticatedOnly(hf)
+}
+
+func (h *Handler) HandleDeleteComment() http.Handler {
+	hf := http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		commentID := r.PathValue("commentId")
+
+		comment, err := h.commentRepo.GetByID(r.Context(), commentID)
+		if err != nil {
+			slog.ErrorContext(r.Context(), "error on get comment by id", "error", err, "commentId", commentID)
+			http.Error(w, "error on get comment by id", http.StatusInternalServerError)
+
+			return
+		}
+
+		user := userFromContext(r.Context())
+
+		if comment.UserID != user.ID {
+			http.Error(w, "cannot delete comment", http.StatusForbidden)
+
+			return
+		}
+
+		err = h.commentRepo.Delete(r.Context(), commentID)
+		if err != nil {
+			slog.ErrorContext(r.Context(), "error on delete comment", "error", err)
+			http.Error(w, "error on delete comment", http.StatusInternalServerError)
+
+			return
+		}
+
+		post, err := h.postRepo.GetByID(r.Context(), comment.PostID)
+		if err != nil {
+			slog.ErrorContext(r.Context(), "error on get post by id", "error", err, "postId", comment.PostID)
+			http.Error(w, "error on get post by id", http.StatusInternalServerError)
+
+			return
+		}
+
+		http.Redirect(w, r, "/posts/"+post.Slug, http.StatusSeeOther)
+	})
+
+	return h.AuthenticatedOnly(hf)
+}
