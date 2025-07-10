@@ -29,21 +29,9 @@ type UserRepository struct {
 func scanUser(rs squirrel.RowScanner) (*User, error) {
 	var user User
 
-	var userCreatedAt, userUpdatedAt string
-
-	err := rs.Scan(&user.ID, &user.Username, &user.EmailAddress, &user.PasswordHash, &user.Name, &user.AvatarURL, &userCreatedAt, &userUpdatedAt)
+	err := rs.Scan(&user.ID, &user.Username, &user.EmailAddress, &user.PasswordHash, &user.Name, &user.AvatarURL, &user.CreatedAt, &user.UpdatedAt)
 	if err != nil {
 		return nil, fmt.Errorf("error on scan row: %w", err)
-	}
-
-	user.CreatedAt, err = time.Parse(time.RFC3339, userCreatedAt)
-	if err != nil {
-		return nil, fmt.Errorf("error on parse user created at field: %w", err)
-	}
-
-	user.UpdatedAt, err = time.Parse(time.RFC3339, userUpdatedAt)
-	if err != nil {
-		return nil, fmt.Errorf("error on parse user updated at field: %w", err)
 	}
 
 	return &user, nil
@@ -144,7 +132,7 @@ func (repo *UserRepository) ExistsByEmailAddress(ctx context.Context, emailAddre
 func (repo *UserRepository) Insert(ctx context.Context, user *User) error {
 	q := squirrel.Insert("users").
 		Columns("id", "username", "email_address", "password_hash", "name", "avatar_url", "created_at", "updated_at").
-		Values(user.ID, user.Username, user.EmailAddress, user.PasswordHash, user.Name, user.AvatarURL, user.CreatedAt.Format(time.RFC3339), user.UpdatedAt.Format(time.RFC3339))
+		Values(user.ID, user.Username, user.EmailAddress, user.PasswordHash, user.Name, user.AvatarURL, user.CreatedAt, user.UpdatedAt)
 
 	q = q.RunWith(repo.db)
 

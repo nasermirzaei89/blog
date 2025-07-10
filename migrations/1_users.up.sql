@@ -6,8 +6,8 @@ CREATE TABLE
         password_hash TEXT NOT NULL,
         name TEXT NOT NULL,
         avatar_url TEXT NOT NULL,
-        created_at TEXT NOT NULL,
-        updated_at TEXT NOT NULL
+        created_at DATETIME NOT NULL,
+        updated_at DATETIME NOT NULL
     );
 
 INSERT INTO

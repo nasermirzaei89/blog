@@ -91,21 +91,9 @@ func (repo *PostRepository) GetByID(ctx context.Context, id string) (*Post, erro
 func scanPost(rs squirrel.RowScanner) (*Post, error) {
 	var post Post
 
-	var postCreatedAt, postUpdatedAt string
-
-	err := rs.Scan(&post.ID, &post.Title, &post.Slug, &post.Excerpt, &post.Content, &post.AuthorID, &postCreatedAt, &postUpdatedAt)
+	err := rs.Scan(&post.ID, &post.Title, &post.Slug, &post.Excerpt, &post.Content, &post.AuthorID, &post.CreatedAt, &post.UpdatedAt)
 	if err != nil {
 		return nil, fmt.Errorf("error on scan row: %w", err)
-	}
-
-	post.CreatedAt, err = time.Parse(time.RFC3339, postCreatedAt)
-	if err != nil {
-		return nil, fmt.Errorf("error on parse post created at field: %w", err)
-	}
-
-	post.UpdatedAt, err = time.Parse(time.RFC3339, postUpdatedAt)
-	if err != nil {
-		return nil, fmt.Errorf("error on parse post updated at field: %w", err)
 	}
 
 	return &post, nil

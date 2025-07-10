@@ -29,7 +29,7 @@ type CommentRepository struct {
 func (repo *CommentRepository) Insert(ctx context.Context, comment *Comment) error {
 	q := squirrel.Insert("comments").
 		Columns("id", "post_id", "user_id", "content", "created_at", "updated_at").
-		Values(comment.ID, comment.PostID, comment.UserID, comment.Content, comment.CreatedAt.Format(time.RFC3339), comment.UpdatedAt.Format(time.RFC3339))
+		Values(comment.ID, comment.PostID, comment.UserID, comment.Content, comment.CreatedAt, comment.UpdatedAt)
 
 	q = q.RunWith(repo.db)
 
@@ -44,21 +44,9 @@ func (repo *CommentRepository) Insert(ctx context.Context, comment *Comment) err
 func scanComment(rs squirrel.RowScanner) (*Comment, error) {
 	var comment Comment
 
-	var commentCreatedAt, commentUpdatedAt string
-
-	err := rs.Scan(&comment.ID, &comment.PostID, &comment.UserID, &comment.UserUsername, &comment.UserName, &comment.UserAvatarURL, &comment.Content, &commentCreatedAt, &commentUpdatedAt)
+	err := rs.Scan(&comment.ID, &comment.PostID, &comment.UserID, &comment.UserUsername, &comment.UserName, &comment.UserAvatarURL, &comment.Content, &comment.CreatedAt, &comment.UpdatedAt)
 	if err != nil {
 		return nil, fmt.Errorf("error on scan row: %w", err)
-	}
-
-	comment.CreatedAt, err = time.Parse(time.RFC3339, commentCreatedAt)
-	if err != nil {
-		return nil, fmt.Errorf("error on parse comment created at field: %w", err)
-	}
-
-	comment.UpdatedAt, err = time.Parse(time.RFC3339, commentUpdatedAt)
-	if err != nil {
-		return nil, fmt.Errorf("error on parse pocommentst updated at field: %w", err)
 	}
 
 	return &comment, nil

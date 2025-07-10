@@ -14,7 +14,7 @@
     </div>
     <div class="flex flex-col gap-4">
         <h2 class="text-2xl">Comments</h2>
-        {{ $currentUserID := .CurrentUser.ID}}
+        {{ $currentUser := .CurrentUser }}
         {{ range .PostComments }}
         <div class="flex flex-col gap-1">
             <div class="flex flex-row gap-2">
@@ -30,7 +30,7 @@
             <div>
                 {{ .Content }}
             </div>
-            {{ if eq $currentUserID .UserID }}
+            {{ if and $currentUser (eq $currentUser.ID .UserID) }}
             <div class="flex flex-row gap-2">
                 <a href="/comments/{{ .ID }}/edit" class="as-link">Edit</a>
                 <a href="/comments/{{ .ID }}/delete" class="as-link">Delete</a>
