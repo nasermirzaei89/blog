@@ -38,8 +38,8 @@ test: .which-go ## Run tests
 .which-npm:
 	@which npm > /dev/null || (echo "Install NodeJS from https://nodejs.org/en/download" & exit 1)
 
-.PHONY: npm-build ## Build JS and CSS
-npm-build: .which-npm
+.PHONY: npm-build
+npm-build: .which-npm ## Build JS and CSS
 	npm run build:js
 	npm run build:css
 

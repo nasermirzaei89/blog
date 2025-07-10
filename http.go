@@ -12,6 +12,7 @@ import (
 	"github.com/google/uuid"
 	"github.com/gorilla/csrf"
 	"github.com/gorilla/sessions"
+	"github.com/microcosm-cc/bluemonday"
 	"golang.org/x/crypto/bcrypt"
 )
 
@@ -23,6 +24,7 @@ type Handler struct {
 	userRepo    *UserRepository
 	postRepo    *PostRepository
 	commentRepo *CommentRepository
+	htmlPolicy  *bluemonday.Policy
 }
 
 type contextKeyUserType struct{}
@@ -431,6 +433,8 @@ func (h *Handler) HandleSubmitComment() http.Handler {
 		postID := r.FormValue("postId")
 		content := r.FormValue("content")
 
+		content = h.htmlPolicy.Sanitize(content)
+
 		user := userFromContext(r.Context())
 
 		post, err := h.postRepo.GetByID(r.Context(), postID)
@@ -515,6 +519,8 @@ func (h *Handler) HandleEditComment() http.Handler {
 		}
 
 		content := r.FormValue("content")
+
+		content = h.htmlPolicy.Sanitize(content)
 
 		comment, err := h.commentRepo.GetByID(r.Context(), commentID)
 		if err != nil {

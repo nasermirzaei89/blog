@@ -18,6 +18,7 @@ import (
 	"github.com/gorilla/sessions"
 	_ "github.com/joho/godotenv/autoload"
 	_ "github.com/mattn/go-sqlite3"
+	"github.com/microcosm-cc/bluemonday"
 	"github.com/nasermirzaei89/env"
 )
 
@@ -97,6 +98,7 @@ func run(ctx context.Context) error {
 		userRepo:    userRepo,
 		postRepo:    postRepo,
 		commentRepo: commentRepo,
+		htmlPolicy:  bluemonday.UGCPolicy(),
 	}
 
 	mux := http.NewServeMux()
