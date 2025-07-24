@@ -2,3 +2,4 @@
 * text=auto eol=lf
 *.min.css -diff
 *.min.js -diff
+*.min.js.map -diff

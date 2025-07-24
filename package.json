@@ -7,6 +7,7 @@
   },
   "dependencies": {
     "@fontsource/open-sans": "^5.2.6",
+    "@imacrayon/alpine-ajax": "^0.12.4",
     "@tiptap/core": "^3.0.7",
     "@tiptap/extension-blockquote": "^3.0.7",
     "@tiptap/extension-bold": "^3.0.7",
@@ -27,7 +28,8 @@
     "@tiptap/extension-strike": "^3.0.7",
     "@tiptap/extension-text": "^3.0.7",
     "@tiptap/extension-underline": "^3.0.7",
-    "@tiptap/extensions": "^3.0.7"
+    "@tiptap/extensions": "^3.0.7",
+    "alpinejs": "^3.14.9"
   },
   "devDependencies": {
     "@tailwindcss/cli": "^4.1.11",

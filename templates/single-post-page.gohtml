@@ -19,65 +19,10 @@
         </div>
         {{ end }}
     </div>
-    <div class="flex flex-col gap-4">
+    <div id="comments" class="flex flex-col gap-4">
         <h2 class="text-2xl">Comments</h2>
-        {{ range .PostComments }}
-        <div class="flex flex-col gap-1">
-            <div class="flex flex-row gap-2">
-                <div>
-                    <img src="{{ or .UserAvatarURL `https://placehold.co/48` }}" alt="{{ .UserUsername }}"
-                        class="size-8 rounded-full">
-                </div>
-                <div>
-                    <div class="text-sm">{{ .UserName }}</div>
-                    <div class="text-xs">
-                        {{ formatTime .CreatedAt "Jan _2, 2006" }}
-                        {{ if ne .CreatedAt .UpdatedAt }}
-                        <span title="Edited on {{ formatTime .UpdatedAt " Jan _2, 2006" }}">(Edited)</span>
-                        {{ end }}
-                    </div>
-                </div>
-            </div>
-            <div>
-                {{ .Content }}
-            </div>
-            {{ if and $currentUser (eq $currentUser.ID .UserID) }}
-            <div class="flex flex-row gap-2">
-                <a href="/comments/{{ .ID }}/edit" class="as-link">Edit</a>
-                <a href="/comments/{{ .ID }}/delete" class="as-link">Delete</a>
-            </div>
-            {{ end }}
-        </div>
-        {{ end }}
-        <div>
-            {{ if .CurrentUser }}
-            <form method="POST" action="/comments" class="flex flex-col gap-2">
-                {{ .csrfField }}
-                <input type="hidden" name="postId" value="{{ .Post.ID }}" required>
-                <div class="flex flex-row gap-2">
-                    <div>
-                        <img src="{{ or .CurrentUser.AvatarURL `https://placehold.co/48` }}"
-                            alt="{{ .CurrentUser.Username }}" class="size-8 rounded-full">
-                    </div>
-                    <div>
-                        <div class="text-xs">Logged in as</div>
-                        <div class="text-sm">{{ .CurrentUser.Name }}</div>
-                    </div>
-                </div>
-                <div class="as-text-field">
-                    <label for="content">Comment</label>
-                    <textarea name="content" id="content" class="as-textarea" required></textarea>
-                </div>
-                <div>
-                    <input type="submit" value="Submit" class="as-button">
-                </div>
-            </form>
-            {{ else }}
-            <div>
-                Please <a href="/login" class="as-link">log in</a> to send a comment.
-            </div>
-            {{ end }}
-        </div>
+        {{ template "comments-list.gohtml" . }}
+        {{ template "comment-form.gohtml" . }}
     </div>
 </main>
 

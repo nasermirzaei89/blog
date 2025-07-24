@@ -1,6 +1,7 @@
 package main
 
 import (
+	"bytes"
 	"context"
 	"errors"
 	"fmt"
@@ -738,6 +739,42 @@ func (h *Handler) HandleSubmitComment() http.Handler {
 			slog.ErrorContext(r.Context(), "error on insert comment", "error", err)
 			http.Error(w, "error on insert comment", http.StatusInternalServerError)
 
+			return
+		}
+
+		if r.Header.Get("X-Alpine-Request") == "true" {
+			comments, err := h.commentRepo.List(r.Context(), ListCommentsParams{
+				PostID: postID,
+			})
+			if err != nil {
+				slog.ErrorContext(r.Context(), "failed to list comments", "error", err)
+				http.Error(w, "failed to list comments", http.StatusInternalServerError)
+				return
+			}
+
+			data := map[string]any{
+				"Post":         post,
+				"PostComments": comments,
+				"CurrentUser":  user,
+				"csrfField":    csrf.TemplateField(r),
+			}
+
+			var buf bytes.Buffer
+
+			if err := h.tmpl.ExecuteTemplate(&buf, "comments-list.gohtml", data); err != nil {
+				slog.ErrorContext(r.Context(), "error on execute template", "error", err, "template", "comments-list.gohtml")
+				http.Error(w, "error on execute template", http.StatusInternalServerError)
+				return
+			}
+
+			if err := h.tmpl.ExecuteTemplate(&buf, "comment-form.gohtml", data); err != nil {
+				slog.ErrorContext(r.Context(), "error on execute template", "error", err, "template", "comment-form.gohtml")
+				http.Error(w, "error on execute template", http.StatusInternalServerError)
+				return
+			}
+
+			w.Header().Set("Content-Type", "text/html")
+			w.Write(buf.Bytes())
 			return
 		}
 

@@ -1,0 +1,31 @@
+<div id="comments-list">
+    {{ $currentUser := .CurrentUser }}
+    {{ range .PostComments }}
+    <div class="flex flex-col gap-1">
+        <div class="flex flex-row gap-2">
+            <div>
+                <img src="{{ or .UserAvatarURL `https://placehold.co/48` }}" alt="{{ .UserUsername }}"
+                    class="size-8 rounded-full">
+            </div>
+            <div>
+                <div class="text-sm">{{ .UserName }}</div>
+                <div class="text-xs">
+                    {{ formatTime .CreatedAt "Jan _2, 2006" }}
+                    {{ if ne .CreatedAt .UpdatedAt }}
+                    <span title="Edited on {{ formatTime .UpdatedAt " Jan _2, 2006" }}">(Edited)</span>
+                    {{ end }}
+                </div>
+            </div>
+        </div>
+        <div>
+            {{ .Content }}
+        </div>
+        {{ if and $currentUser (eq $currentUser.ID .UserID) }}
+        <div class="flex flex-row gap-2">
+            <a href="/comments/{{ .ID }}/edit" class="as-link">Edit</a>
+            <a href="/comments/{{ .ID }}/delete" class="as-link">Delete</a>
+        </div>
+        {{ end }}
+    </div>
+    {{ end }}
+</div>

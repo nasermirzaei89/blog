@@ -1,4 +1,6 @@
 import "@fontsource/open-sans";
+import Alpine from 'alpinejs'
+import ajax from '@imacrayon/alpine-ajax'
 import { Editor } from '@tiptap/core'
 import Underline from '@tiptap/extension-underline'
 import BulletList from '@tiptap/extension-bullet-list'
@@ -205,3 +207,8 @@ observer.observe(document.body, { childList: true, subtree: true });
 
 const elements = document.querySelectorAll(selector)
 elements.forEach(initWysiwygEditor);
+
+// Initialize Alpine.js with Alpine AJAX plugin
+window.Alpine = Alpine
+Alpine.plugin(ajax)
+Alpine.start()
