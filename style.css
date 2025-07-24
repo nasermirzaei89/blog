@@ -1,5 +1,6 @@
 @import "tailwindcss";
 @plugin "@tailwindcss/typography";
+@source inline("hidden");
 
 @theme {
     --default-font-family: "Open Sans", sans-serif;
@@ -113,5 +114,32 @@ footer {
 
     span {
         @apply inline-flex items-center flex-nowrap;
+    }
+}
+
+.wysiwyg-editor {
+    @apply border-2 border-gray-700 rounded-lg text-gray-950 focus-within:outline-2 outline-gray-300 duration-100;
+    @apply dark:border-gray-300 dark:text-gray-50 dark:outline-gray-700;
+    @apply text-base w-full;
+
+    .wysiwyg-editor-toolbar {
+        @apply flex flex-row flex-wrap divide-x py-2 border-b-2 border-gray-700;
+        @apply dark:border-gray-300;
+
+        .toolset {
+            @apply inline-flex gap-2 px-2;
+
+            button {
+                @apply rounded-sm cursor-pointer text-gray-950 dark:text-gray-50 hover:opacity-80;
+
+                svg {
+                    @apply fill-gray-950 dark:fill-gray-50 size-5;
+                }
+            }
+        }
+    }
+
+    .wysiwyg-editor-content {
+        @apply prose dark:prose-invert max-w-none min-h-32 px-4 focus:outline-none focus:ring-0;
     }
 }
