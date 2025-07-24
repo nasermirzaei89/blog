@@ -31,6 +31,7 @@ type Handler struct {
 	postRepo       *PostRepository
 	commentRepo    *CommentRepository
 	htmlPolicy     *bluemonday.Policy
+	textPolicy     *bluemonday.Policy
 	isShuttingDown atomic.Bool
 }
 
@@ -483,6 +484,12 @@ func (h *Handler) HandleCreatePost() http.Handler {
 			return
 		}
 
+		if excerpt == "" {
+			excerpt = h.textPolicy.Sanitize(content)
+		}
+
+		excerpt = h.generateExcerpt(excerpt, 160)
+
 		content = h.htmlPolicy.Sanitize(content)
 
 		user := userFromContext(r.Context())
@@ -594,6 +601,12 @@ func (h *Handler) HandleEditPost() http.Handler {
 				return
 			}
 		}
+
+		if excerpt == "" {
+			excerpt = h.textPolicy.Sanitize(content)
+		}
+
+		excerpt = h.generateExcerpt(excerpt, 160)
 
 		content = h.htmlPolicy.Sanitize(content)
 
@@ -921,6 +934,23 @@ func (h *Handler) HandleDeleteComment() http.Handler {
 	})
 
 	return h.AuthenticatedOnly(hf)
+}
+
+// generateExcerpt creates a properly sized excerpt from content
+func (h *Handler) generateExcerpt(content string, maxLength int) string {
+	if len(content) <= maxLength {
+		return content
+	}
+
+	// Find the last complete word within the limit
+	excerpt := content[:maxLength]
+	lastSpace := strings.LastIndex(excerpt, " ")
+
+	if lastSpace > 0 {
+		excerpt = excerpt[:lastSpace]
+	}
+
+	return excerpt + "..."
 }
 
 func (h *Handler) generateUniqueSlug(ctx context.Context, baseSlug string) (string, error) {

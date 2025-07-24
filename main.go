@@ -129,6 +129,7 @@ func run() error {
 		postRepo:    postRepo,
 		commentRepo: commentRepo,
 		htmlPolicy:  bluemonday.UGCPolicy(),
+		textPolicy:  bluemonday.StrictPolicy(),
 	}
 
 	mux := http.NewServeMux()

@@ -19,13 +19,12 @@
             </div>
             <div class="as-text-field">
                 <label for="excerpt">Excerpt</label>
-                <textarea id="excerpt" name="excerpt" rows="3" required
-                    class="as-textarea">{{ .Post.Excerpt }}</textarea>
+                <textarea id="excerpt" name="excerpt" rows="3" class="as-textarea">{{ .Post.Excerpt }}</textarea>
             </div>
             <div class="as-text-field">
                 <label for="content">Content</label>
-                <textarea id="content" name="content" rows="10" required
-                    class="as-textarea" data-wysiwyg-editor>{{ .Post.Content }}</textarea>
+                <textarea id="content" name="content" rows="10" required class="as-textarea"
+                    data-wysiwyg-editor>{{ .Post.Content }}</textarea>
             </div>
             <div>
                 <input type="submit" value="Update Post" class="as-button">
