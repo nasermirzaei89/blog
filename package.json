@@ -6,7 +6,7 @@
     "build:css": "tailwindcss -i ./style.css -o ./static/style.min.css --minify"
   },
   "dependencies": {
-    "@fontsource/open-sans": "^5.2.5",
+    "@fontsource/open-sans": "^5.2.6",
     "@tiptap/core": "^3.0.7",
     "@tiptap/extension-blockquote": "^3.0.7",
     "@tiptap/extension-bold": "^3.0.7",
@@ -30,7 +30,7 @@
     "@tiptap/extensions": "^3.0.7"
   },
   "devDependencies": {
-    "@tailwindcss/cli": "^4.1.6",
+    "@tailwindcss/cli": "^4.1.11",
     "@tailwindcss/typography": "^0.5.16",
     "esbuild": "^0.25.8"
   }
