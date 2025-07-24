@@ -3,11 +3,14 @@ package main
 import (
 	"context"
 	"errors"
+	"fmt"
 	"html/template"
 	"io/fs"
 	"log/slog"
 	"net/http"
 	"runtime/debug"
+	"strconv"
+	"strings"
 	"sync/atomic"
 	"time"
 
@@ -473,6 +476,13 @@ func (h *Handler) HandleCreatePost() http.Handler {
 		}
 		slug = slugify.Make(slug)
 
+		uniqueSlug, err := h.generateUniqueSlug(r.Context(), slug)
+		if err != nil {
+			slog.ErrorContext(r.Context(), "error generating unique slug", "error", err)
+			http.Error(w, "error generating unique slug", http.StatusInternalServerError)
+			return
+		}
+
 		content = h.htmlPolicy.Sanitize(content)
 
 		user := userFromContext(r.Context())
@@ -482,7 +492,7 @@ func (h *Handler) HandleCreatePost() http.Handler {
 		post := &Post{
 			ID:        uuid.NewString(),
 			Title:     title,
-			Slug:      slug,
+			Slug:      uniqueSlug,
 			Excerpt:   excerpt,
 			Content:   content,
 			AuthorID:  user.ID,
@@ -573,10 +583,22 @@ func (h *Handler) HandleEditPost() http.Handler {
 		}
 		slug = slugify.Make(slug)
 
+		uniqueSlug := slug
+
+		if uniqueSlug != post.Slug {
+			var err error
+			uniqueSlug, err = h.generateUniqueSlug(r.Context(), slug)
+			if err != nil {
+				slog.ErrorContext(r.Context(), "error generating unique slug", "error", err)
+				http.Error(w, "error generating unique slug", http.StatusInternalServerError)
+				return
+			}
+		}
+
 		content = h.htmlPolicy.Sanitize(content)
 
 		post.Title = title
-		post.Slug = slug
+		post.Slug = uniqueSlug
 		post.Excerpt = excerpt
 		post.Content = content
 		post.UpdatedAt = time.Now()
@@ -899,4 +921,45 @@ func (h *Handler) HandleDeleteComment() http.Handler {
 	})
 
 	return h.AuthenticatedOnly(hf)
+}
+
+func (h *Handler) generateUniqueSlug(ctx context.Context, baseSlug string) (string, error) {
+	exists, err := h.postRepo.SlugExists(ctx, baseSlug)
+	if err != nil {
+		return "", fmt.Errorf("error checking slug existence: %w", err)
+	}
+
+	if !exists {
+		return baseSlug, nil
+	}
+
+	basePart := baseSlug
+	counter := 2
+
+	parts := strings.Split(baseSlug, "-")
+	if len(parts) > 1 {
+		lastPart := parts[len(parts)-1]
+		if num, err := strconv.Atoi(lastPart); err == nil {
+			basePart = strings.Join(parts[:len(parts)-1], "-")
+			counter = num + 1
+		}
+	}
+
+	for {
+		candidateSlug := basePart + "-" + fmt.Sprintf("%d", counter)
+		exists, err := h.postRepo.SlugExists(ctx, candidateSlug)
+		if err != nil {
+			return "", err
+		}
+
+		if !exists {
+			return candidateSlug, nil
+		}
+
+		counter++
+
+		if counter > 1000 {
+			return "", fmt.Errorf("unable to generate unique slug after 1000 attempts")
+		}
+	}
 }
