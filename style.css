@@ -132,6 +132,10 @@ footer {
             button {
                 @apply rounded-sm cursor-pointer text-gray-950 dark:text-gray-50 hover:opacity-80;
 
+                &.active {
+                    @apply bg-gray-300 dark:bg-gray-700;
+                }
+
                 svg {
                     @apply fill-gray-950 dark:fill-gray-50 size-5;
                 }
