@@ -14,6 +14,7 @@ import (
 	"github.com/google/uuid"
 	"github.com/gorilla/csrf"
 	"github.com/gorilla/sessions"
+	slugify "github.com/gosimple/slug"
 	"github.com/microcosm-cc/bluemonday"
 	"golang.org/x/crypto/bcrypt"
 )
@@ -401,35 +402,264 @@ func (h *Handler) HandleLogout() http.Handler {
 	return h.AuthenticatedOnly(hf)
 }
 
-func (h *Handler) HandleViewPostPage(w http.ResponseWriter, r *http.Request) {
-	postSlug := r.PathValue("postSlug")
-	post, err := h.postRepo.GetBySlug(r.Context(), postSlug)
-	if err != nil {
-		slog.ErrorContext(r.Context(), "failed to list posts", "error", err)
-		http.Error(w, "failed to list posts", http.StatusInternalServerError)
-		return
-	}
+func (h *Handler) HandleViewPostPage() http.Handler {
+	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		postSlug := r.PathValue("postSlug")
+		post, err := h.postRepo.GetBySlug(r.Context(), postSlug)
+		if err != nil {
+			slog.ErrorContext(r.Context(), "failed to list posts", "error", err)
+			http.Error(w, "failed to list posts", http.StatusInternalServerError)
+			return
+		}
 
-	comments, err := h.commentRepo.List(r.Context(), ListCommentsParams{PostID: post.ID})
-	if err != nil {
-		slog.ErrorContext(r.Context(), "failed to post comments", "error", err)
-		http.Error(w, "failed to list post comments", http.StatusInternalServerError)
-		return
-	}
+		comments, err := h.commentRepo.List(r.Context(), ListCommentsParams{PostID: post.ID})
+		if err != nil {
+			slog.ErrorContext(r.Context(), "failed to post comments", "error", err)
+			http.Error(w, "failed to list post comments", http.StatusInternalServerError)
+			return
+		}
 
-	data := map[string]any{
-		csrf.TemplateTag: csrf.TemplateField(r),
-		"CurrentUser":    userFromContext(r.Context()),
-		"CurrentPath":    r.URL.Path,
-		"Post":           post,
-		"PostComments":   comments,
-	}
+		data := map[string]any{
+			csrf.TemplateTag: csrf.TemplateField(r),
+			"CurrentUser":    userFromContext(r.Context()),
+			"CurrentPath":    r.URL.Path,
+			"Post":           post,
+			"PostComments":   comments,
+		}
 
-	err = h.tmpl.ExecuteTemplate(w, "single-post-page.gohtml", data)
-	if err != nil {
-		slog.ErrorContext(r.Context(), "failed to execute template", "error", err)
-		http.Error(w, "failed to execute template", http.StatusInternalServerError)
-	}
+		err = h.tmpl.ExecuteTemplate(w, "single-post-page.gohtml", data)
+		if err != nil {
+			slog.ErrorContext(r.Context(), "failed to execute template", "error", err)
+			http.Error(w, "failed to execute template", http.StatusInternalServerError)
+		}
+	})
+}
+
+func (h *Handler) HandleNewPostPage() http.Handler {
+	hf := http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		data := map[string]any{
+			csrf.TemplateTag: csrf.TemplateField(r),
+			"CurrentUser":    userFromContext(r.Context()),
+			"CurrentPath":    r.URL.Path,
+		}
+
+		err := h.tmpl.ExecuteTemplate(w, "new-post-page.gohtml", data)
+		if err != nil {
+			slog.ErrorContext(r.Context(), "failed to execute template", "error", err)
+			http.Error(w, "failed to execute template", http.StatusInternalServerError)
+		}
+	})
+
+	return h.AuthenticatedOnly(hf)
+}
+
+func (h *Handler) HandleCreatePost() http.Handler {
+	hf := http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		err := r.ParseForm()
+		if err != nil {
+			slog.ErrorContext(r.Context(), "error on parse form", "error", err)
+			http.Error(w, "error on parse form", http.StatusInternalServerError)
+
+			return
+		}
+
+		title := r.FormValue("title")
+		slug := r.FormValue("slug")
+		excerpt := r.FormValue("excerpt")
+		content := r.FormValue("content")
+
+		if slug == "" {
+			slug = title
+		}
+		slug = slugify.Make(slug)
+
+		content = h.htmlPolicy.Sanitize(content)
+
+		user := userFromContext(r.Context())
+
+		timeNow := time.Now()
+
+		post := &Post{
+			ID:        uuid.NewString(),
+			Title:     title,
+			Slug:      slug,
+			Excerpt:   excerpt,
+			Content:   content,
+			AuthorID:  user.ID,
+			CreatedAt: timeNow,
+			UpdatedAt: timeNow,
+		}
+
+		err = h.postRepo.Insert(r.Context(), post)
+		if err != nil {
+			slog.ErrorContext(r.Context(), "error on insert post", "error", err)
+			http.Error(w, "error on insert post", http.StatusInternalServerError)
+
+			return
+		}
+
+		http.Redirect(w, r, "/posts/"+post.Slug, http.StatusSeeOther)
+	})
+
+	return h.AuthenticatedOnly(hf)
+}
+
+func (h *Handler) HandleEditPostPage() http.Handler {
+	hf := http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		postSlug := r.PathValue("postSlug")
+		post, err := h.postRepo.GetBySlug(r.Context(), postSlug)
+		if err != nil {
+			slog.ErrorContext(r.Context(), "error on get post by slug", "error", err, "postSlug", postSlug)
+			http.Error(w, "error on get post by slug", http.StatusInternalServerError)
+
+			return
+		}
+
+		user := userFromContext(r.Context())
+
+		if post.AuthorID != user.ID {
+			http.Error(w, "cannot edit post", http.StatusForbidden)
+
+			return
+		}
+
+		data := map[string]any{
+			csrf.TemplateTag: csrf.TemplateField(r),
+			"CurrentUser":    user,
+			"CurrentPath":    r.URL.Path,
+			"Post":           post,
+		}
+
+		err = h.tmpl.ExecuteTemplate(w, "edit-post-page.gohtml", data)
+		if err != nil {
+			slog.ErrorContext(r.Context(), "failed to execute template", "error", err)
+			http.Error(w, "failed to execute template", http.StatusInternalServerError)
+		}
+	})
+	return h.AuthenticatedOnly(hf)
+}
+
+func (h *Handler) HandleEditPost() http.Handler {
+	hf := http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		postSlug := r.PathValue("postSlug")
+		post, err := h.postRepo.GetBySlug(r.Context(), postSlug)
+		if err != nil {
+			slog.ErrorContext(r.Context(), "error on get post by slug", "error", err, "postSlug", postSlug)
+			http.Error(w, "error on get post by slug", http.StatusInternalServerError)
+			return
+		}
+
+		user := userFromContext(r.Context())
+		if post.AuthorID != user.ID {
+			http.Error(w, "cannot edit post", http.StatusForbidden)
+			return
+		}
+
+		err = r.ParseForm()
+		if err != nil {
+			slog.ErrorContext(r.Context(), "error on parse form", "error", err)
+			http.Error(w, "error on parse form", http.StatusInternalServerError)
+
+			return
+		}
+
+		title := r.FormValue("title")
+		slug := r.FormValue("slug")
+		excerpt := r.FormValue("excerpt")
+		content := r.FormValue("content")
+
+		if slug == "" {
+			slug = title
+		}
+		slug = slugify.Make(slug)
+
+		content = h.htmlPolicy.Sanitize(content)
+
+		post.Title = title
+		post.Slug = slug
+		post.Excerpt = excerpt
+		post.Content = content
+		post.UpdatedAt = time.Now()
+
+		err = h.postRepo.Replace(r.Context(), post.ID, post)
+		if err != nil {
+			slog.ErrorContext(r.Context(), "error on replace post", "error", err)
+			http.Error(w, "error on replace post", http.StatusInternalServerError)
+
+			return
+		}
+
+		http.Redirect(w, r, "/posts/"+post.Slug, http.StatusSeeOther)
+	})
+
+	return h.AuthenticatedOnly(hf)
+}
+
+func (h *Handler) HandleDeletePostPage() http.Handler {
+	hf := http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		postSlug := r.PathValue("postSlug")
+		post, err := h.postRepo.GetBySlug(r.Context(), postSlug)
+		if err != nil {
+			slog.ErrorContext(r.Context(), "error on get post by slug", "error", err, "postSlug", postSlug)
+			http.Error(w, "error on get post by slug", http.StatusInternalServerError)
+
+			return
+		}
+
+		user := userFromContext(r.Context())
+		if post.AuthorID != user.ID {
+			http.Error(w, "cannot delete post", http.StatusForbidden)
+
+			return
+		}
+
+		data := map[string]any{
+			csrf.TemplateTag: csrf.TemplateField(r),
+			"CurrentUser":    user,
+			"CurrentPath":    r.URL.Path,
+			"Post":           post,
+		}
+
+		err = h.tmpl.ExecuteTemplate(w, "delete-post-page.gohtml", data)
+		if err != nil {
+			slog.ErrorContext(r.Context(), "failed to execute template", "error", err)
+			http.Error(w, "failed to execute template", http.StatusInternalServerError)
+		}
+	})
+
+	return h.AuthenticatedOnly(hf)
+}
+
+func (h *Handler) HandleDeletePost() http.Handler {
+	hf := http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		postSlug := r.PathValue("postSlug")
+		post, err := h.postRepo.GetBySlug(r.Context(), postSlug)
+		if err != nil {
+			slog.ErrorContext(r.Context(), "error on get post by slug", "error", err, "postSlug", postSlug)
+			http.Error(w, "error on get post by slug", http.StatusInternalServerError)
+
+			return
+		}
+
+		user := userFromContext(r.Context())
+		if post.AuthorID != user.ID {
+			http.Error(w, "cannot delete post", http.StatusForbidden)
+
+			return
+		}
+
+		err = h.postRepo.Delete(r.Context(), post.ID)
+		if err != nil {
+			slog.ErrorContext(r.Context(), "error on delete post", "error", err)
+			http.Error(w, "error on delete post", http.StatusInternalServerError)
+
+			return
+		}
+
+		http.Redirect(w, r, "/", http.StatusSeeOther)
+	})
+
+	return h.AuthenticatedOnly(hf)
 }
 
 func (h *Handler) HandleSubmitComment() http.Handler {
@@ -501,11 +731,20 @@ func (h *Handler) HandleEditCommentPage() http.Handler {
 			return
 		}
 
+		post, err := h.postRepo.GetByID(r.Context(), comment.PostID)
+		if err != nil {
+			slog.ErrorContext(r.Context(), "error on get post by id", "error", err, "postId", comment.PostID)
+			http.Error(w, "error on get post by id", http.StatusInternalServerError)
+
+			return
+		}
+
 		data := map[string]any{
 			csrf.TemplateTag: csrf.TemplateField(r),
 			"CurrentUser":    userFromContext(r.Context()),
 			"CurrentPath":    r.URL.Path,
 			"Comment":        comment,
+			"Post":           post,
 		}
 
 		err = h.tmpl.ExecuteTemplate(w, "edit-comment-page.gohtml", data)
@@ -594,11 +833,20 @@ func (h *Handler) HandleDeleteCommentPage() http.Handler {
 			return
 		}
 
+		post, err := h.postRepo.GetByID(r.Context(), comment.PostID)
+		if err != nil {
+			slog.ErrorContext(r.Context(), "error on get post by id", "error", err, "postId", comment.PostID)
+			http.Error(w, "error on get post by id", http.StatusInternalServerError)
+
+			return
+		}
+
 		data := map[string]any{
 			csrf.TemplateTag: csrf.TemplateField(r),
 			"CurrentUser":    userFromContext(r.Context()),
 			"CurrentPath":    r.URL.Path,
 			"Comment":        comment,
+			"Post":           post,
 		}
 
 		err = h.tmpl.ExecuteTemplate(w, "delete-comment-page.gohtml", data)

@@ -4,7 +4,6 @@ import (
 	"context"
 	"database/sql"
 	"fmt"
-	"html/template"
 	"log/slog"
 	"time"
 
@@ -16,7 +15,7 @@ type Post struct {
 	Title     string
 	Slug      string
 	Excerpt   string
-	Content   template.HTML
+	Content   string
 	AuthorID  string
 	CreatedAt time.Time
 	UpdatedAt time.Time
@@ -97,4 +96,78 @@ func scanPost(rs squirrel.RowScanner) (*Post, error) {
 	}
 
 	return &post, nil
+}
+
+func (repo *PostRepository) Insert(ctx context.Context, post *Post) error {
+	q := squirrel.Insert("posts").
+		Columns("id", "title", "slug", "excerpt", "content", "author_id", "created_at", "updated_at").
+		Values(post.ID, post.Title, post.Slug, post.Excerpt, post.Content, post.AuthorID, post.CreatedAt, post.UpdatedAt)
+
+	q = q.RunWith(repo.db)
+
+	result, err := q.ExecContext(ctx)
+	if err != nil {
+		return fmt.Errorf("error on exec insert: %w", err)
+	}
+
+	rowsAffected, err := result.RowsAffected()
+	if err != nil {
+		return fmt.Errorf("error on get rows affected: %w", err)
+	}
+
+	if rowsAffected == 0 {
+		return fmt.Errorf("no rows affected")
+	}
+
+	return nil
+}
+
+func (repo *PostRepository) Replace(ctx context.Context, id string, post *Post) error {
+	q := squirrel.Update("posts").
+		Set("title", post.Title).
+		Set("slug", post.Slug).
+		Set("excerpt", post.Excerpt).
+		Set("content", post.Content).
+		Set("author_id", post.AuthorID).
+		Where(squirrel.Eq{"id": id})
+
+	q = q.RunWith(repo.db)
+
+	result, err := q.ExecContext(ctx)
+	if err != nil {
+		return fmt.Errorf("error on exec replace: %w", err)
+	}
+
+	rowsAffected, err := result.RowsAffected()
+	if err != nil {
+		return fmt.Errorf("error on get rows affected: %w", err)
+	}
+
+	if rowsAffected == 0 {
+		return fmt.Errorf("no rows affected")
+	}
+
+	return nil
+}
+
+func (repo *PostRepository) Delete(ctx context.Context, id string) error {
+	q := squirrel.Delete("posts").Where(squirrel.Eq{"id": id})
+
+	q = q.RunWith(repo.db)
+
+	result, err := q.ExecContext(ctx)
+	if err != nil {
+		return fmt.Errorf("error on exec delete: %w", err)
+	}
+
+	rowsAffected, err := result.RowsAffected()
+	if err != nil {
+		return fmt.Errorf("error on get rows affected: %w", err)
+	}
+
+	if rowsAffected == 0 {
+		return fmt.Errorf("no rows affected")
+	}
+
+	return nil
 }

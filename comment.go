@@ -141,9 +141,18 @@ func (repo *CommentRepository) Replace(ctx context.Context, id string, comment *
 
 	q = q.RunWith(repo.db)
 
-	_, err := q.ExecContext(ctx)
+	result, err := q.ExecContext(ctx)
 	if err != nil {
 		return fmt.Errorf("error on exec query: %w", err)
+	}
+
+	rowsAffected, err := result.RowsAffected()
+	if err != nil {
+		return fmt.Errorf("error on get rows affected: %w", err)
+	}
+
+	if rowsAffected == 0 {
+		return fmt.Errorf("no rows affected")
 	}
 
 	return nil

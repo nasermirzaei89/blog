@@ -101,6 +101,9 @@ func run() error {
 		"or": func(s1, s2 string) string {
 			return cmp.Or(s1, s2)
 		},
+		"html": func(s string) template.HTML {
+			return template.HTML(s)
+		},
 		"_lang": func() string {
 			return "en"
 		},
@@ -131,7 +134,13 @@ func run() error {
 	mux := http.NewServeMux()
 
 	// Routes
-	mux.HandleFunc("GET /posts/{postSlug}", h.HandleViewPostPage)
+	mux.Handle("GET /posts/{postSlug}", h.HandleViewPostPage())
+	mux.Handle("GET /posts/new", h.HandleNewPostPage())
+	mux.Handle("POST /posts", h.HandleCreatePost())
+	mux.Handle("GET /posts/{postSlug}/edit", h.HandleEditPostPage())
+	mux.Handle("POST /posts/{postSlug}/edit", h.HandleEditPost())
+	mux.Handle("GET /posts/{postSlug}/delete", h.HandleDeletePostPage())
+	mux.Handle("POST /posts/{postSlug}/delete", h.HandleDeletePost())
 	mux.Handle("GET /login", h.HandleLoginPage())
 	mux.Handle("POST /login", h.HandleLogin())
 	mux.Handle("GET /register", h.HandleRegisterPage())

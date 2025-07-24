@@ -2,19 +2,25 @@
 
 {{ template "header.gohtml" . }}
 
+{{ $currentUser := .CurrentUser }}
 <main class="gap-4">
     <div class="flex flex-col gap-1">
         <h1 class="text-3xl">
             {{ .Post.Title }}
         </h1>
         <div class="prose dark:prose-invert">
-            {{ .Post.Content }}
+            {{ html .Post.Content }}
         </div>
         <div class="text-sm italic">{{ formatTime .Post.CreatedAt "Jan _2, 2006" }}</div>
+        {{ if and $currentUser (eq $currentUser.ID .Post.AuthorID) }}
+        <div class="flex flex-row gap-2">
+            <a href="/posts/{{ .Post.Slug }}/edit" class="as-link">Edit</a>
+            <a href="/posts/{{ .Post.Slug }}/delete" class="as-link">Delete</a>
+        </div>
+        {{ end }}
     </div>
     <div class="flex flex-col gap-4">
         <h2 class="text-2xl">Comments</h2>
-        {{ $currentUser := .CurrentUser }}
         {{ range .PostComments }}
         <div class="flex flex-col gap-1">
             <div class="flex flex-row gap-2">
@@ -27,7 +33,7 @@
                     <div class="text-xs">
                         {{ formatTime .CreatedAt "Jan _2, 2006" }}
                         {{ if ne .CreatedAt .UpdatedAt }}
-                        <span title="Edited on {{ formatTime .UpdatedAt "Jan _2, 2006" }}">(Edited)</span>
+                        <span title="Edited on {{ formatTime .UpdatedAt " Jan _2, 2006" }}">(Edited)</span>
                         {{ end }}
                     </div>
                 </div>

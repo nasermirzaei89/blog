@@ -5,6 +5,9 @@
         <ul>
             {{ if .CurrentUser }}
             <li>
+                <a href="/posts/new" class="as-link">New Post</a>
+            </li>
+            <li>
                 <a href="/logout" class="as-link">Logout</a>
             </li>
             {{ else }}
