@@ -18,7 +18,7 @@ import Italic from '@tiptap/extension-italic'
 import Strike from '@tiptap/extension-strike'
 import Dropcursor from '@tiptap/extension-dropcursor'
 import Gapcursor from '@tiptap/extension-gapcursor'
-import History from '@tiptap/extension-history'
+import { UndoRedo } from '@tiptap/extensions'
 
 const initWysiwygEditor = (element) => {
     const editorContainer = document.createElement("div");
@@ -49,7 +49,7 @@ const initWysiwygEditor = (element) => {
 
             Dropcursor,
             Gapcursor,
-            History,
+            UndoRedo,
 
             Heading,
             Paragraph,
