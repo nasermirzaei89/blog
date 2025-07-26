@@ -1,0 +1,53 @@
+{{ template "page-header.gohtml" }}
+
+{{ template "header.gohtml" . }}
+
+<main class="gap-4 max-w-xl mx-auto py-8">
+    <section class="mb-8">
+        <h2 class="text-xl font-semibold mb-4">Profile Information</h2>
+        <form method="POST" action="/profile" class="flex flex-col gap-2" autocomplete="off">
+            {{ .csrfField }}
+            <div class="as-text-field">
+                <label for="name" class="block text-sm font-medium">Name</label>
+                <input type="text" id="name" name="name" value="{{ .CurrentUser.Name }}" class="as-text-input" required>
+            </div>
+            <div class="as-text-field">
+                <label for="emailAddress" class="block text-sm font-medium">Email</label>
+                <input type="email" id="emailAddress" name="emailAddress" value="{{ .CurrentUser.EmailAddress }}" class="as-text-input" required>
+            </div>
+            <div class="as-text-field">
+                <label for="avatarUrl" class="block text-sm font-medium">Avatar URL</label>
+                <input type="url" id="avatarUrl" name="avatarUrl" value="{{ .CurrentUser.AvatarURL }}" class="as-text-input"
+                    placeholder="https://example.com/avatar.png">
+            </div>
+            <div>
+                <button type="submit" class="as-button">Update Profile</button>
+            </div>
+        </form>
+    </section>
+    <section>
+        <h2 class="text-xl font-semibold mb-4">Change Password</h2>
+        <form method="POST" action="/profile/password" class="flex flex-col gap-2">
+            {{ .csrfField }}
+            <div class="as-text-field">
+            <label for="currentPassword" class="block text-sm font-medium">Current Password</label>
+            <input type="password" id="currentPassword" name="currentPassword" class="as-text-input" required autocomplete="current-password">
+            </div>
+            <div class="as-text-field">
+            <label for="newPassword" class="block text-sm font-medium">New Password</label>
+            <input type="password" id="newPassword" name="newPassword" class="as-text-input" required autocomplete="new-password">
+            </div>
+            <div class="as-text-field">
+            <label for="newPasswordConfirmation" class="block text-sm font-medium">Confirm New Password</label>
+            <input type="password" id="newPasswordConfirmation" name="newPasswordConfirmation" class="as-text-input" required autocomplete="new-password">
+            </div>
+            <div>
+            <button type="submit" class="as-button">Change Password</button>
+            </div>
+        </form>
+    </section>
+</main>
+
+{{ template "footer.gohtml" }}
+
+{{ template "page-footer.gohtml" }}

@@ -11,22 +11,22 @@
             {{ .csrfField }}
             <div class="as-text-field">
                 <label for="username">Username</label>
-                <input type="text" name="username" id="username" class="as-text-input" required>
+                <input type="text" name="username" id="username" class="as-text-input" required autocomplete="username">
             </div>
             <div class="as-text-field">
                 <label for="emailAddress">Email Address</label>
-                <input type="email" name="emailAddress" id="emailAddress" class="as-text-input" required>
+                <input type="email" name="emailAddress" id="emailAddress" class="as-text-input" required autocomplete="email">
             </div>
             <div class="as-text-field">
                 <label for="password">Password</label>
-                <input type="password" name="password" id="password" class="as-text-input" required>
+                <input type="password" name="password" id="password" class="as-text-input" required autocomplete="new-password">
             </div>
             <div class="as-text-field">
                 <label for="passwordConfirmation">Password Confirmation</label>
-                <input type="password" name="passwordConfirmation" id="passwordConfirmation" class="as-text-input" required>
+                <input type="password" name="passwordConfirmation" id="passwordConfirmation" class="as-text-input" required autocomplete="new-password">
             </div>
             <div>
-                <input type="submit" value="Sign Up" class="as-button">
+                <button type="submit" class="as-button">Sign Up</button>
             </div>
             <div>
                 Already have an account?

@@ -445,6 +445,110 @@ func (h *Handler) HandleLogout() http.Handler {
 	return h.AuthenticatedOnly(hf)
 }
 
+func (h *Handler) HandleProfilePage() http.Handler {
+	hf := http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		user := userFromContext(r.Context())
+
+		data := map[string]any{
+			csrf.TemplateTag: csrf.TemplateField(r),
+			"CurrentUser":    user,
+			"CurrentPath":    r.URL.Path,
+		}
+
+		err := h.tmpl.ExecuteTemplate(w, "profile-page.gohtml", data)
+		if err != nil {
+			slog.ErrorContext(r.Context(), "failed to execute template", "error", err)
+			http.Error(w, "failed to execute template", http.StatusInternalServerError)
+		}
+	})
+
+	return h.AuthenticatedOnly(hf)
+}
+
+func (h *Handler) HandleProfileUpdate() http.Handler {
+	hf := http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		err := r.ParseForm()
+		if err != nil {
+			slog.ErrorContext(r.Context(), "error on parse form", "error", err)
+			http.Error(w, "error on parse form", http.StatusInternalServerError)
+			return
+		}
+
+		user := userFromContext(r.Context())
+
+		name := r.FormValue("name")
+		emailAddress := r.FormValue("emailAddress")
+		avatarURL := r.FormValue("avatarUrl")
+
+		user.Name = name
+		user.EmailAddress = emailAddress
+		user.AvatarURL = avatarURL
+
+		err = h.userRepo.Update(r.Context(), user)
+		if err != nil {
+			slog.ErrorContext(r.Context(), "error on update user", "error", err)
+			http.Error(w, "error on update user", http.StatusInternalServerError)
+			return
+		}
+
+		http.Redirect(w, r, "/profile", http.StatusSeeOther)
+	})
+
+	return h.AuthenticatedOnly(hf)
+}
+
+func (h *Handler) HandleProfilePasswordUpdate() http.Handler {
+	hf := http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		err := r.ParseForm()
+		if err != nil {
+			slog.ErrorContext(r.Context(), "error on parse form", "error", err)
+			http.Error(w, "error on parse form", http.StatusInternalServerError)
+			return
+		}
+
+		user := userFromContext(r.Context())
+
+		currentPassword := r.FormValue("currentPassword")
+		newPassword := r.FormValue("newPassword")
+		newPasswordConfirmation := r.FormValue("newPasswordConfirmation")
+
+		if newPassword != newPasswordConfirmation {
+			http.Error(w, "new password and confirmation do not match", http.StatusBadRequest)
+			return
+		}
+
+		if currentPassword == "" || newPassword == "" {
+			http.Error(w, "current password and new password cannot be empty", http.StatusBadRequest)
+			return
+		}
+
+		if err := bcrypt.CompareHashAndPassword([]byte(user.PasswordHash), []byte(currentPassword)); err != nil {
+			http.Error(w, "current password is incorrect", http.StatusUnauthorized)
+			return
+		}
+
+		newPasswordHash, err := bcrypt.GenerateFromPassword([]byte(newPassword), bcrypt.DefaultCost)
+		if err != nil {
+			slog.ErrorContext(r.Context(), "error on hash new password", "error", err)
+			http.Error(w, "error on hash new password", http.StatusInternalServerError)
+			return
+		}
+
+		user.PasswordHash = string(newPasswordHash)
+
+		err = h.userRepo.Update(r.Context(), user)
+		if err != nil {
+			slog.ErrorContext(r.Context(), "error on update user", "error", err)
+			http.Error(w, "error on update user", http.StatusInternalServerError)
+			return
+		}
+
+		http.Redirect(w, r, "/profile", http.StatusSeeOther)
+	})
+
+	return h.AuthenticatedOnly(hf)
+}
+
 func (h *Handler) HandleViewPostPage() http.Handler {
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		postSlug := r.PathValue("postSlug")
@@ -655,10 +759,10 @@ func (h *Handler) HandleEditPost() http.Handler {
 		post.Content = content
 		post.UpdatedAt = time.Now()
 
-		err = h.postRepo.Replace(r.Context(), post.ID, post)
+		err = h.postRepo.Update(r.Context(), post)
 		if err != nil {
-			slog.ErrorContext(r.Context(), "error on replace post", "error", err)
-			http.Error(w, "error on replace post", http.StatusInternalServerError)
+			slog.ErrorContext(r.Context(), "error on update post", "error", err)
+			http.Error(w, "error on update post", http.StatusInternalServerError)
 
 			return
 		}
@@ -902,10 +1006,10 @@ func (h *Handler) HandleEditComment() http.Handler {
 		comment.Content = content
 		comment.UpdatedAt = time.Now()
 
-		err = h.commentRepo.Replace(r.Context(), commentID, comment)
+		err = h.commentRepo.Update(r.Context(), comment)
 		if err != nil {
-			slog.ErrorContext(r.Context(), "error on replace comment", "error", err)
-			http.Error(w, "error on replace comment", http.StatusInternalServerError)
+			slog.ErrorContext(r.Context(), "error on update comment", "error", err)
+			http.Error(w, "error on update comment", http.StatusInternalServerError)
 
 			return
 		}

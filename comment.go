@@ -129,15 +129,13 @@ func (repo *CommentRepository) GetByID(ctx context.Context, id string) (*Comment
 	return comment, nil
 }
 
-func (repo *CommentRepository) Replace(ctx context.Context, id string, comment *Comment) error {
+func (repo *CommentRepository) Update(ctx context.Context, comment *Comment) error {
 	q := squirrel.Update("comments").SetMap(map[string]any{
-		"id":         comment.ID,
 		"post_id":    comment.PostID,
 		"user_id":    comment.UserID,
 		"content":    comment.Content,
-		"created_at": comment.CreatedAt,
 		"updated_at": comment.UpdatedAt,
-	}).Where(squirrel.Eq{"id": id})
+	}).Where(squirrel.Eq{"id": comment.ID})
 
 	q = q.RunWith(repo.db)
 

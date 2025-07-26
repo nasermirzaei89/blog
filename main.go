@@ -141,6 +141,19 @@ func run() error {
 	mux := http.NewServeMux()
 
 	// Routes
+	mux.HandleFunc("GET /healthz", h.HandleHealthz)
+
+	mux.Handle("GET /login", h.HandleLoginPage())
+	mux.Handle("POST /login", h.HandleLogin())
+	mux.Handle("GET /register", h.HandleRegisterPage())
+	mux.Handle("POST /register", h.HandleRegister())
+	mux.Handle("GET /logout", h.HandleLogoutPage())
+	mux.Handle("POST /logout", h.HandleLogout())
+
+	mux.Handle("GET /profile", h.HandleProfilePage())
+	mux.Handle("POST /profile", h.HandleProfileUpdate())
+	mux.Handle("POST /profile/password", h.HandleProfilePasswordUpdate())
+
 	mux.Handle("GET /posts/{postSlug}", h.HandleViewPostPage())
 	mux.Handle("GET /posts/new", h.HandleNewPostPage())
 	mux.Handle("POST /posts", h.HandleCreatePost())
@@ -148,18 +161,13 @@ func run() error {
 	mux.Handle("POST /posts/{postSlug}/edit", h.HandleEditPost())
 	mux.Handle("GET /posts/{postSlug}/delete", h.HandleDeletePostPage())
 	mux.Handle("POST /posts/{postSlug}/delete", h.HandleDeletePost())
-	mux.Handle("GET /login", h.HandleLoginPage())
-	mux.Handle("POST /login", h.HandleLogin())
-	mux.Handle("GET /register", h.HandleRegisterPage())
-	mux.Handle("POST /register", h.HandleRegister())
-	mux.Handle("GET /logout", h.HandleLogoutPage())
-	mux.Handle("POST /logout", h.HandleLogout())
+
 	mux.Handle("POST /comments", h.HandleSubmitComment())
 	mux.Handle("GET /comments/{commentId}/edit", h.HandleEditCommentPage())
 	mux.Handle("POST /comments/{commentId}/edit", h.HandleEditComment())
 	mux.Handle("GET /comments/{commentId}/delete", h.HandleDeleteCommentPage())
 	mux.Handle("POST /comments/{commentId}/delete", h.HandleDeleteComment())
-	mux.HandleFunc("GET /healthz", h.HandleHealthz)
+
 	mux.HandleFunc("GET /", h.HandleIndex)
 
 	// CSRF Middleware

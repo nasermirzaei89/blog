@@ -163,3 +163,23 @@ func (repo *UserRepository) Insert(ctx context.Context, user *User) error {
 
 	return nil
 }
+
+func (repo *UserRepository) Update(ctx context.Context, user *User) error {
+	q := squirrel.Update("users").
+		Set("username", user.Username).
+		Set("email_address", user.EmailAddress).
+		Set("password_hash", user.PasswordHash).
+		Set("name", user.Name).
+		Set("avatar_url", user.AvatarURL).
+		Set("updated_at", user.UpdatedAt).
+		Where(squirrel.Eq{"id": user.ID})
+
+	q = q.RunWith(repo.db)
+
+	_, err := q.ExecContext(ctx)
+	if err != nil {
+		return fmt.Errorf("error on exec query: %w", err)
+	}
+
+	return nil
+}

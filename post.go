@@ -160,7 +160,7 @@ func (repo *PostRepository) Insert(ctx context.Context, post *Post) error {
 	return nil
 }
 
-func (repo *PostRepository) Replace(ctx context.Context, id string, post *Post) error {
+func (repo *PostRepository) Update(ctx context.Context, post *Post) error {
 	q := squirrel.Update("posts").
 		Set("title", post.Title).
 		Set("slug", post.Slug).
@@ -168,7 +168,7 @@ func (repo *PostRepository) Replace(ctx context.Context, id string, post *Post) 
 		Set("content", post.Content).
 		Set("author_id", post.AuthorID).
 		Set("updated_at", post.UpdatedAt).
-		Where(squirrel.Eq{"id": id})
+		Where(squirrel.Eq{"id": post.ID})
 
 	q = q.RunWith(repo.db)
 

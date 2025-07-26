@@ -11,17 +11,17 @@
             {{ .csrfField }}
             <div class="as-text-field">
                 <label for="username">Username</label>
-                <input type="text" name="username" id="username" class="as-text-input" required>
+                <input type="text" name="username" id="username" class="as-text-input" required autocomplete="username">
             </div>
             <div class="as-text-field">
                 <label for="password">Password</label>
-                <input type="password" name="password" id="password" class="as-text-input" required>
+                <input type="password" name="password" id="password" class="as-text-input" required autocomplete="current-password">
             </div>
             <div>
                 <a href="/forgot-password" class="as-link">Forgot Password?</a>
             </div>
             <div>
-                <input type="submit" value="Sign In" class="as-button">
+                <button type="submit" class="as-button">Sign In</button>
             </div>
             <div>
                 Don't have an account?
