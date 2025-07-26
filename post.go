@@ -136,7 +136,7 @@ func scanPost(rs squirrel.RowScanner) (*Post, error) {
 	return &post, nil
 }
 
-func (repo *PostRepository) Insert(ctx context.Context, post *Post) error {
+func (repo *PostRepository) Create(ctx context.Context, post *Post) error {
 	q := squirrel.Insert("posts").
 		Columns("id", "title", "slug", "excerpt", "content", "author_id", "created_at", "updated_at").
 		Values(post.ID, post.Title, post.Slug, post.Excerpt, post.Content, post.AuthorID, post.CreatedAt, post.UpdatedAt)

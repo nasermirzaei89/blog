@@ -20,20 +20,23 @@ import (
 	"github.com/gorilla/sessions"
 	slugify "github.com/gosimple/slug"
 	"github.com/microcosm-cc/bluemonday"
+	"github.com/nasermirzaei89/blog/mailer"
 	"golang.org/x/crypto/bcrypt"
 )
 
 type Handler struct {
-	static         fs.FS
-	cookieStore    *sessions.CookieStore
-	sessionName    string
-	tmpl           *template.Template
-	userRepo       *UserRepository
-	postRepo       *PostRepository
-	commentRepo    *CommentRepository
-	htmlPolicy     *bluemonday.Policy
-	textPolicy     *bluemonday.Policy
-	isShuttingDown atomic.Bool
+	static                 fs.FS
+	cookieStore            *sessions.CookieStore
+	sessionName            string
+	tmpl                   *template.Template
+	userRepo               *UserRepository
+	postRepo               *PostRepository
+	commentRepo            *CommentRepository
+	passwordResetTokenRepo *PasswordResetTokenRepository
+	mailer                 mailer.Mailer
+	htmlPolicy             *bluemonday.Policy
+	textPolicy             *bluemonday.Policy
+	isShuttingDown         atomic.Bool
 }
 
 type contextKeyUserType struct{}
@@ -369,10 +372,10 @@ func (h *Handler) HandleRegister() http.Handler {
 			UpdatedAt:    timeNow,
 		}
 
-		err = h.userRepo.Insert(r.Context(), user)
+		err = h.userRepo.Create(r.Context(), user)
 		if err != nil {
-			slog.ErrorContext(r.Context(), "error on insert user", "error", err)
-			http.Error(w, "error on insert user", http.StatusInternalServerError)
+			slog.ErrorContext(r.Context(), "error on create user", "error", err)
+			http.Error(w, "error on create user", http.StatusInternalServerError)
 
 			return
 		}
@@ -443,6 +446,184 @@ func (h *Handler) HandleLogout() http.Handler {
 	})
 
 	return h.AuthenticatedOnly(hf)
+}
+
+func (h *Handler) HandleForgotPasswordPage() http.Handler {
+	hf := http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		data := map[string]any{
+			csrf.TemplateTag: csrf.TemplateField(r),
+		}
+
+		err := h.tmpl.ExecuteTemplate(w, "forgot-password-page.gohtml", data)
+		if err != nil {
+			slog.ErrorContext(r.Context(), "failed to execute template", "error", err)
+			http.Error(w, "failed to execute template", http.StatusInternalServerError)
+		}
+	})
+
+	return h.GuestOnly(hf)
+}
+
+func (h *Handler) HandleForgotPassword() http.Handler {
+	hf := http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		err := r.ParseForm()
+		if err != nil {
+			slog.ErrorContext(r.Context(), "error on parse form", "error", err)
+			http.Error(w, "error on parse form", http.StatusInternalServerError)
+			return
+		}
+
+		emailAddress := r.FormValue("emailAddress")
+		if emailAddress == "" {
+			http.Error(w, "email address cannot be empty", http.StatusBadRequest)
+			return
+		}
+
+		user, err := h.userRepo.GetByEmailAddress(r.Context(), emailAddress)
+		if err != nil {
+			if errors.As(err, &UserByEmailNotFoundError{}) {
+				// Do not reveal if email exists for security
+				http.Redirect(w, r, "/", http.StatusSeeOther)
+				return
+			}
+
+			slog.ErrorContext(r.Context(), "error retrieving user by email", "error", err)
+			http.Error(w, "error retrieving user", http.StatusInternalServerError)
+			return
+		}
+
+		resetToken := uuid.NewString()
+		resetTokenExpiry := time.Now().Add(1 * time.Hour)
+
+		reset := &PasswordResetToken{
+			ID:        uuid.NewString(),
+			UserID:    user.ID,
+			Token:     resetToken,
+			ExpiresAt: resetTokenExpiry,
+		}
+		if err := h.passwordResetTokenRepo.Create(r.Context(), reset); err != nil {
+			slog.ErrorContext(r.Context(), "error saving reset token", "error", err)
+			http.Error(w, "error saving reset token", http.StatusInternalServerError)
+			return
+		}
+
+		// Send reset email
+		resetLink := fmt.Sprintf("%s/reset-password?token=%s", getHostURL(r), resetToken)
+		subject := "Password Reset Request"
+		body := fmt.Sprintf("To reset your password, click the following link:\n\n%s\n\nIf you did not request a password reset, you can ignore this email.", resetLink)
+		if err := h.mailer.SendEmail(r.Context(), emailAddress, subject, body); err != nil {
+			slog.ErrorContext(r.Context(), "failed to send reset email", "error", err)
+			// Do not reveal error to user
+		}
+
+		http.Redirect(w, r, "/", http.StatusSeeOther)
+	})
+
+	return h.GuestOnly(hf)
+}
+
+func getHostURL(r *http.Request) string {
+	scheme := "http"
+	if r.TLS != nil {
+		scheme = "https"
+	} else if r.Header.Get("X-Forwarded-Proto") != "" {
+		scheme = r.Header.Get("X-Forwarded-Proto")
+	}
+
+	return fmt.Sprintf("%s://%s", scheme, r.Host)
+}
+
+func (h *Handler) HandleResetPasswordPage() http.Handler {
+	hf := http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		token := r.URL.Query().Get("token")
+		if token == "" {
+			http.Error(w, "token is required", http.StatusBadRequest)
+			return
+		}
+
+		data := map[string]any{
+			csrf.TemplateTag: csrf.TemplateField(r),
+			"Token":          token,
+		}
+
+		err := h.tmpl.ExecuteTemplate(w, "reset-password-page.gohtml", data)
+		if err != nil {
+			slog.ErrorContext(r.Context(), "failed to execute template", "error", err)
+			http.Error(w, "failed to execute template", http.StatusInternalServerError)
+		}
+	})
+
+	return h.GuestOnly(hf)
+}
+
+func (h *Handler) HandleResetPassword() http.Handler {
+	hf := http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		err := r.ParseForm()
+		if err != nil {
+			slog.ErrorContext(r.Context(), "error on parse form", "error", err)
+			http.Error(w, "error on parse form", http.StatusInternalServerError)
+			return
+		}
+
+		token := r.FormValue("token")
+		if token == "" {
+			http.Error(w, "reset token is required", http.StatusBadRequest)
+			return
+		}
+
+		resetToken, err := h.passwordResetTokenRepo.GetByToken(r.Context(), token)
+		if err != nil {
+			slog.ErrorContext(r.Context(), "invalid or expired reset token", "error", err)
+			http.Error(w, "invalid or expired reset token", http.StatusBadRequest)
+			return
+		}
+
+		if time.Now().After(resetToken.ExpiresAt) {
+			http.Error(w, "reset token has expired", http.StatusBadRequest)
+			return
+		}
+
+		user, err := h.userRepo.GetByID(r.Context(), resetToken.UserID)
+		if err != nil {
+			slog.ErrorContext(r.Context(), "user not found for reset token", "error", err)
+			http.Error(w, "user not found", http.StatusInternalServerError)
+			return
+		}
+
+		newPassword := r.FormValue("newPassword")
+		newPasswordConfirmation := r.FormValue("newPasswordConfirmation")
+		if newPassword == "" || newPasswordConfirmation == "" {
+			http.Error(w, "password and confirmation cannot be empty", http.StatusBadRequest)
+			return
+		}
+		if newPassword != newPasswordConfirmation {
+			http.Error(w, "password and confirmation do not match", http.StatusBadRequest)
+			return
+		}
+
+		newPasswordHash, err := bcrypt.GenerateFromPassword([]byte(newPassword), bcrypt.DefaultCost)
+		if err != nil {
+			slog.ErrorContext(r.Context(), "error hashing new password", "error", err)
+			http.Error(w, "error hashing new password", http.StatusInternalServerError)
+			return
+		}
+
+		user.PasswordHash = string(newPasswordHash)
+		user.UpdatedAt = time.Now()
+		if err := h.userRepo.Update(r.Context(), user); err != nil {
+			slog.ErrorContext(r.Context(), "error updating user password", "error", err)
+			http.Error(w, "error updating password", http.StatusInternalServerError)
+			return
+		}
+
+		if err := h.passwordResetTokenRepo.Delete(r.Context(), resetToken.ID); err != nil {
+			slog.ErrorContext(r.Context(), "error deleting used reset token", "error", err)
+		}
+
+		http.Redirect(w, r, "/", http.StatusSeeOther)
+	})
+
+	return h.GuestOnly(hf)
 }
 
 func (h *Handler) HandleProfilePage() http.Handler {
@@ -650,10 +831,10 @@ func (h *Handler) HandleCreatePost() http.Handler {
 			UpdatedAt: timeNow,
 		}
 
-		err = h.postRepo.Insert(r.Context(), post)
+		err = h.postRepo.Create(r.Context(), post)
 		if err != nil {
-			slog.ErrorContext(r.Context(), "error on insert post", "error", err)
-			http.Error(w, "error on insert post", http.StatusInternalServerError)
+			slog.ErrorContext(r.Context(), "error on create post", "error", err)
+			http.Error(w, "error on create post", http.StatusInternalServerError)
 
 			return
 		}
@@ -876,10 +1057,10 @@ func (h *Handler) HandleSubmitComment() http.Handler {
 			UpdatedAt: timeNow,
 		}
 
-		err = h.commentRepo.Insert(r.Context(), comment)
+		err = h.commentRepo.Create(r.Context(), comment)
 		if err != nil {
-			slog.ErrorContext(r.Context(), "error on insert comment", "error", err)
-			http.Error(w, "error on insert comment", http.StatusInternalServerError)
+			slog.ErrorContext(r.Context(), "error on create comment", "error", err)
+			http.Error(w, "error on create comment", http.StatusInternalServerError)
 
 			return
 		}

@@ -21,6 +21,7 @@ import (
 	_ "github.com/joho/godotenv/autoload"
 	_ "github.com/mattn/go-sqlite3"
 	"github.com/microcosm-cc/bluemonday"
+	"github.com/nasermirzaei89/blog/mailer"
 	"github.com/nasermirzaei89/env"
 )
 
@@ -86,6 +87,7 @@ func run() error {
 	userRepo := &UserRepository{db: db}
 	postRepo := &PostRepository{db: db}
 	commentRepo := &CommentRepository{db: db}
+	passwordResetTokenRepo := &PasswordResetTokenRepository{db: db}
 
 	//
 	static, err := fs.Sub(embeddedFS, "static")
@@ -125,17 +127,31 @@ func run() error {
 	cookieStore := sessions.NewCookieStore([]byte(env.MustGetString("SESSION_KEY")))
 	sessionName := env.GetString("SESSION_NAME", "blog")
 
+	// Mailer
+	smtpHost := env.MustGetString("SMTP_HOST")
+	smtpPort := env.MustGetString("SMTP_PORT")
+	smtpFrom := env.MustGetString("SMTP_FROM")
+	smtpMailer := mailer.SMTPMailer{
+		Host:     smtpHost,
+		Port:     smtpPort,
+		Username: env.GetString("SMTP_USERNAME", ""),
+		Password: env.GetString("SMTP_PASSWORD", ""),
+		From:     smtpFrom,
+	}
+
 	// HTTP Handler
 	h := &Handler{
-		static:      static,
-		cookieStore: cookieStore,
-		sessionName: sessionName,
-		tmpl:        tmpl,
-		userRepo:    userRepo,
-		postRepo:    postRepo,
-		commentRepo: commentRepo,
-		htmlPolicy:  bluemonday.UGCPolicy(),
-		textPolicy:  bluemonday.StrictPolicy(),
+		static:                 static,
+		cookieStore:            cookieStore,
+		sessionName:            sessionName,
+		tmpl:                   tmpl,
+		userRepo:               userRepo,
+		postRepo:               postRepo,
+		commentRepo:            commentRepo,
+		passwordResetTokenRepo: passwordResetTokenRepo,
+		mailer:                 &smtpMailer,
+		htmlPolicy:             bluemonday.UGCPolicy(),
+		textPolicy:             bluemonday.StrictPolicy(),
 	}
 
 	mux := http.NewServeMux()
@@ -149,6 +165,10 @@ func run() error {
 	mux.Handle("POST /register", h.HandleRegister())
 	mux.Handle("GET /logout", h.HandleLogoutPage())
 	mux.Handle("POST /logout", h.HandleLogout())
+	mux.Handle("GET /forgot-password", h.HandleForgotPasswordPage())
+	mux.Handle("POST /forgot-password", h.HandleForgotPassword())
+	mux.Handle("GET /reset-password", h.HandleResetPasswordPage())
+	mux.Handle("POST /reset-password", h.HandleResetPassword())
 
 	mux.Handle("GET /profile", h.HandleProfilePage())
 	mux.Handle("POST /profile", h.HandleProfileUpdate())

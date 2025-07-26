@@ -62,6 +62,50 @@ func (repo *UserRepository) GetByUsername(ctx context.Context, username string) 
 	return user, nil
 }
 
+type UserByEmailNotFoundError struct {
+	EmailAddress string
+}
+
+func (err UserByEmailNotFoundError) Error() string {
+	return fmt.Sprintf("user by email address '%s' not found", err.EmailAddress)
+}
+
+func (repo *UserRepository) GetByEmailAddress(ctx context.Context, emailAddress string) (*User, error) {
+	q := squirrel.Select("*").From("users").Where(squirrel.Eq{"email_address": emailAddress})
+	q = q.RunWith(repo.db)
+	user, err := scanUser(q.QueryRowContext(ctx))
+	if err != nil {
+		if errors.Is(err, sql.ErrNoRows) {
+			return nil, UserByEmailNotFoundError{EmailAddress: emailAddress}
+		}
+
+		return nil, fmt.Errorf("error on scan user: %w", err)
+	}
+
+	return user, nil
+}
+
+type UserByIDNotFoundError struct {
+	ID string
+}
+
+func (err UserByIDNotFoundError) Error() string {
+	return fmt.Sprintf("user by id '%s' not found", err.ID)
+}
+
+func (repo *UserRepository) GetByID(ctx context.Context, id string) (*User, error) {
+	q := squirrel.Select("*").From("users").Where(squirrel.Eq{"id": id})
+	q = q.RunWith(repo.db)
+	user, err := scanUser(q.QueryRowContext(ctx))
+	if err != nil {
+		if errors.Is(err, sql.ErrNoRows) {
+			return nil, UserByIDNotFoundError{ID: id}
+		}
+		return nil, fmt.Errorf("error on scan user: %w", err)
+	}
+	return user, nil
+}
+
 type ListUsersParams struct {
 	Username     string
 	EmailAddress string
@@ -149,7 +193,7 @@ func (repo *UserRepository) ExistsByEmailAddress(ctx context.Context, emailAddre
 	return true, nil
 }
 
-func (repo *UserRepository) Insert(ctx context.Context, user *User) error {
+func (repo *UserRepository) Create(ctx context.Context, user *User) error {
 	q := squirrel.Insert("users").
 		Columns("id", "username", "email_address", "password_hash", "name", "avatar_url", "created_at", "updated_at").
 		Values(user.ID, user.Username, user.EmailAddress, user.PasswordHash, user.Name, user.AvatarURL, user.CreatedAt, user.UpdatedAt)

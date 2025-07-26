@@ -26,7 +26,7 @@ type CommentRepository struct {
 	db *sql.DB
 }
 
-func (repo *CommentRepository) Insert(ctx context.Context, comment *Comment) error {
+func (repo *CommentRepository) Create(ctx context.Context, comment *Comment) error {
 	q := squirrel.Insert("comments").
 		Columns("id", "post_id", "user_id", "content", "created_at", "updated_at").
 		Values(comment.ID, comment.PostID, comment.UserID, comment.Content, comment.CreatedAt, comment.UpdatedAt)
