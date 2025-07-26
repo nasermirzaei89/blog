@@ -38,6 +38,29 @@
         </div>
         {{ end }}
     </div>
+    <nav class="flex justify-between items-center mt-4">
+        <div>
+            {{ if gt .CurrentPage 1 }}
+            <a href="/?page={{ sub .CurrentPage 1 }}" class="as-link">
+                <span>&lt;</span>
+                Previous
+            </a>
+            {{ end }}
+        </div>
+
+        <div>
+            Page {{ .CurrentPage }} of {{ .TotalPages }}
+        </div>
+
+        <div>
+            {{ if lt .CurrentPage .TotalPages }}
+            <a href="/?page={{ add .CurrentPage 1 }}" class="as-link">
+                Next
+                <span>&gt;</span>
+            </a>
+            {{ end }}
+        </div>
+    </nav>
 </main>
 
 {{ template "footer.gohtml" }}

@@ -104,6 +104,12 @@ func run() error {
 		"html": func(s string) template.HTML {
 			return template.HTML(s)
 		},
+		"sub": func(a, b int) int {
+			return a - b
+		},
+		"add": func(a, b int) int {
+			return a + b
+		},
 		"_lang": func() string {
 			return "en"
 		},

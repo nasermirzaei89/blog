@@ -25,8 +25,21 @@ type PostRepository struct {
 	db *sql.DB
 }
 
-func (repo *PostRepository) List(ctx context.Context) ([]*Post, error) {
+type ListPostsParams struct {
+	Limit  int
+	Offset int
+}
+
+func (repo *PostRepository) List(ctx context.Context, params ListPostsParams) ([]*Post, error) {
 	q := squirrel.Select("*").From("posts").OrderBy("created_at DESC")
+
+	if params.Limit > 0 {
+		q = q.Limit(uint64(params.Limit))
+	}
+
+	if params.Offset > 0 {
+		q = q.Offset(uint64(params.Offset))
+	}
 
 	q = q.RunWith(repo.db)
 
@@ -59,6 +72,17 @@ func (repo *PostRepository) List(ctx context.Context) ([]*Post, error) {
 	}
 
 	return posts, nil
+}
+
+func (repo *PostRepository) Count(ctx context.Context) (int, error) {
+	q := squirrel.Select("COUNT(*)").From("posts")
+	q = q.RunWith(repo.db)
+	var count int
+	err := q.QueryRowContext(ctx).Scan(&count)
+	if err != nil {
+		return 0, fmt.Errorf("error on count posts: %w", err)
+	}
+	return count, nil
 }
 
 func (repo *PostRepository) GetBySlug(ctx context.Context, slug string) (*Post, error) {

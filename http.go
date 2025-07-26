@@ -128,7 +128,7 @@ func (h *Handler) HandleStatic(w http.ResponseWriter, r *http.Request) {
 }
 
 func (h *Handler) HandleIndex(w http.ResponseWriter, r *http.Request) {
-	if r.RequestURI == "/" {
+	if r.URL.Path == "/" {
 		h.HandleHomePage(w, r)
 		return
 	}
@@ -146,17 +146,55 @@ func (h *Handler) HandleHealthz(w http.ResponseWriter, r *http.Request) {
 }
 
 func (h *Handler) HandleHomePage(w http.ResponseWriter, r *http.Request) {
-	posts, err := h.postRepo.List(r.Context())
+	listPostsParams := ListPostsParams{
+		Limit:  10,
+		Offset: 0,
+	}
+
+	pageNum := 1
+
+	page := r.URL.Query().Get("page")
+	if page != "" {
+		var err error
+
+		pageNum, err = strconv.Atoi(page)
+		if err != nil {
+			slog.ErrorContext(r.Context(), "error on parse page number", "error", err, "page", page)
+			http.Error(w, "invalid page number", http.StatusBadRequest)
+			return
+		}
+
+		if pageNum < 1 {
+			slog.ErrorContext(r.Context(), "invalid page number", "page", pageNum)
+			http.Error(w, "invalid page number", http.StatusBadRequest)
+			return
+		}
+
+		listPostsParams.Offset = (pageNum - 1) * listPostsParams.Limit
+	}
+
+	posts, err := h.postRepo.List(r.Context(), listPostsParams)
 	if err != nil {
 		slog.ErrorContext(r.Context(), "failed to list posts", "error", err)
 		http.Error(w, "failed to list posts", http.StatusInternalServerError)
 		return
 	}
 
+	totalPosts, err := h.postRepo.Count(r.Context())
+	if err != nil {
+		slog.ErrorContext(r.Context(), "failed to count posts", "error", err)
+		http.Error(w, "failed to count posts", http.StatusInternalServerError)
+		return
+	}
+
+	totalPages := (totalPosts + listPostsParams.Limit - 1) / listPostsParams.Limit
+
 	data := map[string]any{
 		"CurrentUser": userFromContext(r.Context()),
 		"CurrentPath": r.URL.Path,
 		"Posts":       posts,
+		"CurrentPage": pageNum,
+		"TotalPages":  totalPages,
 	}
 
 	err = h.tmpl.ExecuteTemplate(w, "home-page.gohtml", data)

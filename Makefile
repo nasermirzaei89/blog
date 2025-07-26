@@ -9,7 +9,7 @@ IMAGE_TAG?=latest
 
 .DEFAULT_GOAL := .default
 
-.default: format build test
+.default: npm-build format build test
 
 .PHONY: help
 help: ## Show help
