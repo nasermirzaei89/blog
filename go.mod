@@ -14,11 +14,15 @@ require (
 	github.com/mattn/go-sqlite3 v1.14.28
 	github.com/microcosm-cc/bluemonday v1.0.27
 	github.com/nasermirzaei89/env v1.7.0
+	github.com/playwright-community/playwright-go v0.5200.0
 	golang.org/x/crypto v0.40.0
 )
 
 require (
 	github.com/aymerick/douceur v0.2.0 // indirect
+	github.com/deckarep/golang-set/v2 v2.7.0 // indirect
+	github.com/go-jose/go-jose/v3 v3.0.4 // indirect
+	github.com/go-stack/stack v1.8.1 // indirect
 	github.com/gorilla/css v1.0.1 // indirect
 	github.com/gorilla/securecookie v1.1.2 // indirect
 	github.com/gosimple/unidecode v1.0.1 // indirect

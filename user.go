@@ -1,4 +1,4 @@
-package main
+package blog
 
 import (
 	"context"
@@ -23,7 +23,7 @@ type User struct {
 }
 
 type UserRepository struct {
-	db *sql.DB
+	DB *sql.DB
 }
 
 func scanUser(rs squirrel.RowScanner) (*User, error) {
@@ -48,7 +48,7 @@ func (err UserByUsernameNotFoundError) Error() string {
 func (repo *UserRepository) GetByUsername(ctx context.Context, username string) (*User, error) {
 	q := squirrel.Select("*").From("users").Where(squirrel.Eq{"username": username})
 
-	q = q.RunWith(repo.db)
+	q = q.RunWith(repo.DB)
 
 	user, err := scanUser(q.QueryRowContext(ctx))
 	if err != nil {
@@ -72,7 +72,7 @@ func (err UserByEmailNotFoundError) Error() string {
 
 func (repo *UserRepository) GetByEmailAddress(ctx context.Context, emailAddress string) (*User, error) {
 	q := squirrel.Select("*").From("users").Where(squirrel.Eq{"email_address": emailAddress})
-	q = q.RunWith(repo.db)
+	q = q.RunWith(repo.DB)
 	user, err := scanUser(q.QueryRowContext(ctx))
 	if err != nil {
 		if errors.Is(err, sql.ErrNoRows) {
@@ -95,7 +95,7 @@ func (err UserByIDNotFoundError) Error() string {
 
 func (repo *UserRepository) GetByID(ctx context.Context, id string) (*User, error) {
 	q := squirrel.Select("*").From("users").Where(squirrel.Eq{"id": id})
-	q = q.RunWith(repo.db)
+	q = q.RunWith(repo.DB)
 	user, err := scanUser(q.QueryRowContext(ctx))
 	if err != nil {
 		if errors.Is(err, sql.ErrNoRows) {
@@ -122,7 +122,7 @@ func (repo *UserRepository) List(ctx context.Context, params ListUsersParams) ([
 		q = q.Where(squirrel.Eq{"email_address": params.EmailAddress})
 	}
 
-	q = q.RunWith(repo.db)
+	q = q.RunWith(repo.DB)
 
 	rows, err := q.QueryContext(ctx)
 	if err != nil {
@@ -158,7 +158,7 @@ func (repo *UserRepository) List(ctx context.Context, params ListUsersParams) ([
 func (repo *UserRepository) ExistsByUsername(ctx context.Context, username string) (bool, error) {
 	q := squirrel.Select("1").From("users").Where(squirrel.Eq{"username": username})
 
-	q = q.RunWith(repo.db)
+	q = q.RunWith(repo.DB)
 
 	var dummy int
 
@@ -177,7 +177,7 @@ func (repo *UserRepository) ExistsByUsername(ctx context.Context, username strin
 func (repo *UserRepository) ExistsByEmailAddress(ctx context.Context, emailAddress string) (bool, error) {
 	q := squirrel.Select("1").From("users").Where(squirrel.Eq{"email_address": emailAddress})
 
-	q = q.RunWith(repo.db)
+	q = q.RunWith(repo.DB)
 
 	var dummy int
 
@@ -198,7 +198,7 @@ func (repo *UserRepository) Create(ctx context.Context, user *User) error {
 		Columns("id", "username", "email_address", "password_hash", "name", "avatar_url", "created_at", "updated_at").
 		Values(user.ID, user.Username, user.EmailAddress, user.PasswordHash, user.Name, user.AvatarURL, user.CreatedAt, user.UpdatedAt)
 
-	q = q.RunWith(repo.db)
+	q = q.RunWith(repo.DB)
 
 	_, err := q.ExecContext(ctx)
 	if err != nil {
@@ -218,7 +218,7 @@ func (repo *UserRepository) Update(ctx context.Context, user *User) error {
 		Set("updated_at", user.UpdatedAt).
 		Where(squirrel.Eq{"id": user.ID})
 
-	q = q.RunWith(repo.db)
+	q = q.RunWith(repo.DB)
 
 	_, err := q.ExecContext(ctx)
 	if err != nil {

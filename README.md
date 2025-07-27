@@ -6,7 +6,7 @@ Copy `.env.example` to `.env` and update it.
 Then:
 
 ```shell
-go run .
+make run
 ```
 
 or
@@ -23,3 +23,11 @@ For using forgot-password you need to run:
 ```shell
 docker run --name=mailpit -p 8025:8025 -p 1025:1025 axllent/mailpit
 ```
+
+## Test
+
+```shell
+make test
+```
+
+to debug playwright tests set `export PWDEBUG=1`

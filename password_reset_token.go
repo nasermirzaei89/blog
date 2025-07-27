@@ -1,4 +1,4 @@
-package main
+package blog
 
 import (
 	"context"
@@ -19,7 +19,7 @@ type PasswordResetToken struct {
 }
 
 type PasswordResetTokenRepository struct {
-	db *sql.DB
+	DB *sql.DB
 }
 
 func scanPasswordResetToken(rs squirrel.RowScanner) (*PasswordResetToken, error) {
@@ -36,7 +36,7 @@ func scanPasswordResetToken(rs squirrel.RowScanner) (*PasswordResetToken, error)
 func (repo *PasswordResetTokenRepository) GetByToken(ctx context.Context, tokenStr string) (*PasswordResetToken, error) {
 	q := squirrel.Select("*").From("password_reset_tokens").Where(squirrel.Eq{"token": tokenStr})
 
-	q = q.RunWith(repo.db)
+	q = q.RunWith(repo.DB)
 
 	token, err := scanPasswordResetToken(q.QueryRowContext(ctx))
 	if err != nil {
@@ -54,7 +54,7 @@ func (repo *PasswordResetTokenRepository) Create(ctx context.Context, token *Pas
 	q := squirrel.Insert("password_reset_tokens").
 		Columns("id", "user_id", "token", "created_at", "expires_at").
 		Values(token.ID, token.UserID, token.Token, token.CreatedAt, token.ExpiresAt).
-		RunWith(repo.db)
+		RunWith(repo.DB)
 
 	_, err := q.ExecContext(ctx)
 	if err != nil {
@@ -66,7 +66,7 @@ func (repo *PasswordResetTokenRepository) Create(ctx context.Context, token *Pas
 
 func (repo *PasswordResetTokenRepository) Delete(ctx context.Context, tokenID string) error {
 	q := squirrel.Delete("password_reset_tokens").Where(squirrel.Eq{"id": tokenID})
-	q = q.RunWith(repo.db)
+	q = q.RunWith(repo.DB)
 
 	_, err := q.ExecContext(ctx)
 	if err != nil {

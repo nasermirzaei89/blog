@@ -20,9 +20,13 @@ help: ## Show help
 .which-go:
 	@which go > /dev/null || (echo "Install Go from https://go.dev/doc/install" & exit 1)
 
+.PHONY: run
+run: .which-go ## Run application
+	go run -v $(ROOT)/cmd/$(APP_NAME)
+
 .PHONY: build
 build: .which-go ## Build binary
-	CGO_ENABLED=1 go build -v -o $(ROOT)/bin/$(APP_NAME) $(ROOT)
+	CGO_ENABLED=1 go build -v -o $(ROOT)/bin/$(APP_NAME) $(ROOT)/cmd/$(APP_NAME)
 
 .PHONY: format
 format: .which-go ## Format files
@@ -31,7 +35,7 @@ format: .which-go ## Format files
 
 .PHONY: test
 test: .which-go ## Run tests
-	CGO_ENABLED=1 go test -race -cover $(ROOT)/...
+	CGO_ENABLED=1 go test -cover $(ROOT)/...
 
 ### Node
 

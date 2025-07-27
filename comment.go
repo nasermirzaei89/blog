@@ -1,4 +1,4 @@
-package main
+package blog
 
 import (
 	"context"
@@ -23,7 +23,7 @@ type Comment struct {
 }
 
 type CommentRepository struct {
-	db *sql.DB
+	DB *sql.DB
 }
 
 func (repo *CommentRepository) Create(ctx context.Context, comment *Comment) error {
@@ -31,7 +31,7 @@ func (repo *CommentRepository) Create(ctx context.Context, comment *Comment) err
 		Columns("id", "post_id", "user_id", "content", "created_at", "updated_at").
 		Values(comment.ID, comment.PostID, comment.UserID, comment.Content, comment.CreatedAt, comment.UpdatedAt)
 
-	q = q.RunWith(repo.db)
+	q = q.RunWith(repo.DB)
 
 	_, err := q.ExecContext(ctx)
 	if err != nil {
@@ -73,7 +73,7 @@ func (repo *CommentRepository) List(ctx context.Context, params ListCommentsPara
 		q = q.Where(squirrel.Eq{"c.post_id": params.PostID})
 	}
 
-	q = q.RunWith(repo.db)
+	q = q.RunWith(repo.DB)
 
 	rows, err := q.QueryContext(ctx)
 	if err != nil {
@@ -119,7 +119,7 @@ func (repo *CommentRepository) GetByID(ctx context.Context, id string) (*Comment
 		"c.updated_at",
 	).From("comments c").Join("users u ON c.user_id = u.id").Where(squirrel.Eq{"c.id": id})
 
-	q = q.RunWith(repo.db)
+	q = q.RunWith(repo.DB)
 
 	comment, err := scanComment(q.QueryRowContext(ctx))
 	if err != nil {
@@ -137,7 +137,7 @@ func (repo *CommentRepository) Update(ctx context.Context, comment *Comment) err
 		"updated_at": comment.UpdatedAt,
 	}).Where(squirrel.Eq{"id": comment.ID})
 
-	q = q.RunWith(repo.db)
+	q = q.RunWith(repo.DB)
 
 	result, err := q.ExecContext(ctx)
 	if err != nil {
@@ -159,7 +159,7 @@ func (repo *CommentRepository) Update(ctx context.Context, comment *Comment) err
 func (repo *CommentRepository) Delete(ctx context.Context, id string) error {
 	q := squirrel.Delete("comments").Where(squirrel.Eq{"id": id})
 
-	q = q.RunWith(repo.db)
+	q = q.RunWith(repo.DB)
 
 	_, err := q.ExecContext(ctx)
 	if err != nil {

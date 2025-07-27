@@ -1,4 +1,4 @@
-package main
+package blog
 
 import (
 	"context"
@@ -22,7 +22,7 @@ type Post struct {
 }
 
 type PostRepository struct {
-	db *sql.DB
+	DB *sql.DB
 }
 
 type ListPostsParams struct {
@@ -41,7 +41,7 @@ func (repo *PostRepository) List(ctx context.Context, params ListPostsParams) ([
 		q = q.Offset(uint64(params.Offset))
 	}
 
-	q = q.RunWith(repo.db)
+	q = q.RunWith(repo.DB)
 
 	rows, err := q.QueryContext(ctx)
 	if err != nil {
@@ -76,7 +76,7 @@ func (repo *PostRepository) List(ctx context.Context, params ListPostsParams) ([
 
 func (repo *PostRepository) Count(ctx context.Context) (int, error) {
 	q := squirrel.Select("COUNT(*)").From("posts")
-	q = q.RunWith(repo.db)
+	q = q.RunWith(repo.DB)
 	var count int
 	err := q.QueryRowContext(ctx).Scan(&count)
 	if err != nil {
@@ -88,7 +88,7 @@ func (repo *PostRepository) Count(ctx context.Context) (int, error) {
 func (repo *PostRepository) GetBySlug(ctx context.Context, slug string) (*Post, error) {
 	q := squirrel.Select("*").From("posts").Where(squirrel.Eq{"slug": slug})
 
-	q = q.RunWith(repo.db)
+	q = q.RunWith(repo.DB)
 
 	post, err := scanPost(q.QueryRowContext(ctx))
 	if err != nil {
@@ -101,7 +101,7 @@ func (repo *PostRepository) GetBySlug(ctx context.Context, slug string) (*Post, 
 func (repo *PostRepository) GetByID(ctx context.Context, id string) (*Post, error) {
 	q := squirrel.Select("*").From("posts").Where(squirrel.Eq{"id": id})
 
-	q = q.RunWith(repo.db)
+	q = q.RunWith(repo.DB)
 
 	post, err := scanPost(q.QueryRowContext(ctx))
 	if err != nil {
@@ -114,7 +114,7 @@ func (repo *PostRepository) GetByID(ctx context.Context, id string) (*Post, erro
 func (repo *PostRepository) SlugExists(ctx context.Context, slug string) (bool, error) {
 	q := squirrel.Select("COUNT(*)").From("posts").Where(squirrel.Eq{"slug": slug})
 
-	q = q.RunWith(repo.db)
+	q = q.RunWith(repo.DB)
 
 	var count int
 	err := q.QueryRowContext(ctx).Scan(&count)
@@ -141,7 +141,7 @@ func (repo *PostRepository) Create(ctx context.Context, post *Post) error {
 		Columns("id", "title", "slug", "excerpt", "content", "author_id", "created_at", "updated_at").
 		Values(post.ID, post.Title, post.Slug, post.Excerpt, post.Content, post.AuthorID, post.CreatedAt, post.UpdatedAt)
 
-	q = q.RunWith(repo.db)
+	q = q.RunWith(repo.DB)
 
 	result, err := q.ExecContext(ctx)
 	if err != nil {
@@ -170,7 +170,7 @@ func (repo *PostRepository) Update(ctx context.Context, post *Post) error {
 		Set("updated_at", post.UpdatedAt).
 		Where(squirrel.Eq{"id": post.ID})
 
-	q = q.RunWith(repo.db)
+	q = q.RunWith(repo.DB)
 
 	result, err := q.ExecContext(ctx)
 	if err != nil {
@@ -192,7 +192,7 @@ func (repo *PostRepository) Update(ctx context.Context, post *Post) error {
 func (repo *PostRepository) Delete(ctx context.Context, id string) error {
 	q := squirrel.Delete("posts").Where(squirrel.Eq{"id": id})
 
-	q = q.RunWith(repo.db)
+	q = q.RunWith(repo.DB)
 
 	result, err := q.ExecContext(ctx)
 	if err != nil {

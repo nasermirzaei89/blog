@@ -1,4 +1,4 @@
-package main
+package blog
 
 import (
 	"bytes"
@@ -15,6 +15,7 @@ import (
 	"sync/atomic"
 	"time"
 
+	"github.com/NYTimes/gziphandler"
 	"github.com/google/uuid"
 	"github.com/gorilla/csrf"
 	"github.com/gorilla/sessions"
@@ -25,23 +26,81 @@ import (
 )
 
 type Handler struct {
-	static                 fs.FS
-	cookieStore            *sessions.CookieStore
-	sessionName            string
-	tmpl                   *template.Template
-	userRepo               *UserRepository
-	postRepo               *PostRepository
-	commentRepo            *CommentRepository
-	passwordResetTokenRepo *PasswordResetTokenRepository
-	mailer                 mailer.Mailer
-	htmlPolicy             *bluemonday.Policy
-	textPolicy             *bluemonday.Policy
+	handler                http.Handler
+	Static                 fs.FS
+	CookieStore            *sessions.CookieStore
+	SessionName            string
+	Template               *template.Template
+	UserRepo               *UserRepository
+	PostRepo               *PostRepository
+	CommentRepo            *CommentRepository
+	PasswordResetTokenRepo *PasswordResetTokenRepository
+	Mailer                 mailer.Mailer
+	HTMLPolicy             *bluemonday.Policy
+	TextPolicy             *bluemonday.Policy
+	CSRFAuthKeys           []byte
+	CSRFTrustedOrigins     []string
 	isShuttingDown         atomic.Bool
 }
 
 type contextKeyUserType struct{}
 
 var contextKeyUser = contextKeyUserType{}
+
+var _ http.Handler = (*Handler)(nil)
+
+func (h *Handler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
+	if h.handler == nil {
+		mux := http.NewServeMux()
+
+		// Routes
+		mux.HandleFunc("GET /healthz", h.HandleHealthz)
+
+		mux.Handle("GET /login", h.HandleLoginPage())
+		mux.Handle("POST /login", h.HandleLogin())
+		mux.Handle("GET /register", h.HandleRegisterPage())
+		mux.Handle("POST /register", h.HandleRegister())
+		mux.Handle("GET /logout", h.HandleLogoutPage())
+		mux.Handle("POST /logout", h.HandleLogout())
+		mux.Handle("GET /forgot-password", h.HandleForgotPasswordPage())
+		mux.Handle("POST /forgot-password", h.HandleForgotPassword())
+		mux.Handle("GET /reset-password", h.HandleResetPasswordPage())
+		mux.Handle("POST /reset-password", h.HandleResetPassword())
+
+		mux.Handle("GET /profile", h.HandleProfilePage())
+		mux.Handle("POST /profile", h.HandleProfileUpdate())
+		mux.Handle("POST /profile/password", h.HandleProfilePasswordUpdate())
+
+		mux.Handle("GET /posts/{postSlug}", h.HandleViewPostPage())
+		mux.Handle("GET /posts/new", h.HandleNewPostPage())
+		mux.Handle("POST /posts", h.HandleCreatePost())
+		mux.Handle("GET /posts/{postSlug}/edit", h.HandleEditPostPage())
+		mux.Handle("POST /posts/{postSlug}/edit", h.HandleEditPost())
+		mux.Handle("GET /posts/{postSlug}/delete", h.HandleDeletePostPage())
+		mux.Handle("POST /posts/{postSlug}/delete", h.HandleDeletePost())
+
+		mux.Handle("POST /comments", h.HandleSubmitComment())
+		mux.Handle("GET /comments/{commentId}/edit", h.HandleEditCommentPage())
+		mux.Handle("POST /comments/{commentId}/edit", h.HandleEditComment())
+		mux.Handle("GET /comments/{commentId}/delete", h.HandleDeleteCommentPage())
+		mux.Handle("POST /comments/{commentId}/delete", h.HandleDeleteComment())
+
+		mux.HandleFunc("GET /", h.HandleIndex)
+
+		// CSRF Middleware
+		csrfMW := csrf.Protect(h.CSRFAuthKeys, csrf.TrustedOrigins(h.CSRFTrustedOrigins))
+
+		// GZip Middleware
+		gzipMW := gziphandler.GzipHandler
+
+		// Auth middleware
+		authMW := h.AuthMiddleware()
+
+		h.handler = gzipMW(csrfMW(h.RecoverMW(authMW(mux))))
+	}
+
+	h.handler.ServeHTTP(w, r)
+}
 
 func (h *Handler) RecoverMW(next http.Handler) http.Handler {
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
@@ -58,7 +117,7 @@ func (h *Handler) RecoverMW(next http.Handler) http.Handler {
 func (h *Handler) AuthMiddleware() func(http.Handler) http.Handler {
 	return func(next http.Handler) http.Handler {
 		return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-			session, err := h.cookieStore.Get(r, h.sessionName)
+			session, err := h.CookieStore.Get(r, h.SessionName)
 			if err != nil {
 				slog.ErrorContext(r.Context(), "error on getting session", "error", err)
 				http.Error(w, "error on getting session", http.StatusInternalServerError)
@@ -66,7 +125,7 @@ func (h *Handler) AuthMiddleware() func(http.Handler) http.Handler {
 			}
 
 			if username := session.Values["username"]; username != nil && username.(string) != "" {
-				user, err := h.userRepo.GetByUsername(r.Context(), username.(string))
+				user, err := h.UserRepo.GetByUsername(r.Context(), username.(string))
 				if err != nil {
 					if errors.As(err, &UserByUsernameNotFoundError{}) {
 						session.Values["username"] = nil
@@ -127,7 +186,7 @@ func (h *Handler) GuestOnly(next http.Handler) http.Handler {
 
 func (h *Handler) HandleStatic(w http.ResponseWriter, r *http.Request) {
 	// w.Header().Set("Cache-Control", "public, max-age=3600")
-	http.FileServer(http.FS(h.static)).ServeHTTP(w, r)
+	http.FileServer(http.FS(h.Static)).ServeHTTP(w, r)
 }
 
 func (h *Handler) HandleIndex(w http.ResponseWriter, r *http.Request) {
@@ -176,14 +235,14 @@ func (h *Handler) HandleHomePage(w http.ResponseWriter, r *http.Request) {
 		listPostsParams.Offset = (pageNum - 1) * listPostsParams.Limit
 	}
 
-	posts, err := h.postRepo.List(r.Context(), listPostsParams)
+	posts, err := h.PostRepo.List(r.Context(), listPostsParams)
 	if err != nil {
 		slog.ErrorContext(r.Context(), "failed to list posts", "error", err)
 		http.Error(w, "failed to list posts", http.StatusInternalServerError)
 		return
 	}
 
-	totalPosts, err := h.postRepo.Count(r.Context())
+	totalPosts, err := h.PostRepo.Count(r.Context())
 	if err != nil {
 		slog.ErrorContext(r.Context(), "failed to count posts", "error", err)
 		http.Error(w, "failed to count posts", http.StatusInternalServerError)
@@ -200,7 +259,7 @@ func (h *Handler) HandleHomePage(w http.ResponseWriter, r *http.Request) {
 		"TotalPages":  totalPages,
 	}
 
-	err = h.tmpl.ExecuteTemplate(w, "home-page.gohtml", data)
+	err = h.Template.ExecuteTemplate(w, "home-page.gohtml", data)
 	if err != nil {
 		slog.ErrorContext(r.Context(), "failed to execute template", "error", err)
 		http.Error(w, "failed to execute template", http.StatusInternalServerError)
@@ -215,7 +274,7 @@ func (h *Handler) HandleLoginPage() http.Handler {
 			"CurrentPath":    r.URL.Path,
 		}
 
-		err := h.tmpl.ExecuteTemplate(w, "login-page.gohtml", data)
+		err := h.Template.ExecuteTemplate(w, "login-page.gohtml", data)
 		if err != nil {
 			slog.ErrorContext(r.Context(), "failed to execute template", "error", err)
 			http.Error(w, "failed to execute template", http.StatusInternalServerError)
@@ -238,7 +297,7 @@ func (h *Handler) HandleLogin() http.Handler {
 		username := r.FormValue("username")
 		password := r.FormValue("password")
 
-		user, err := h.userRepo.GetByUsername(r.Context(), username)
+		user, err := h.UserRepo.GetByUsername(r.Context(), username)
 		if err != nil {
 			if errors.As(err, &UserByUsernameNotFoundError{}) {
 				http.Error(w, "invalid username or password", http.StatusUnauthorized)
@@ -258,7 +317,7 @@ func (h *Handler) HandleLogin() http.Handler {
 			return
 		}
 
-		session, err := h.cookieStore.Get(r, h.sessionName)
+		session, err := h.CookieStore.Get(r, h.SessionName)
 		if err != nil {
 			slog.ErrorContext(r.Context(), "error on getting session", "error", err)
 			http.Error(w, "error on getting session", http.StatusInternalServerError)
@@ -290,7 +349,7 @@ func (h *Handler) HandleRegisterPage() http.Handler {
 			"CurrentPath":    r.URL.Path,
 		}
 
-		err := h.tmpl.ExecuteTemplate(w, "register-page.gohtml", data)
+		err := h.Template.ExecuteTemplate(w, "register-page.gohtml", data)
 		if err != nil {
 			slog.ErrorContext(r.Context(), "failed to execute template", "error", err)
 			http.Error(w, "failed to execute template", http.StatusInternalServerError)
@@ -322,7 +381,7 @@ func (h *Handler) HandleRegister() http.Handler {
 		}
 
 		// FIXME: what to do on security?
-		usernameExists, err := h.userRepo.ExistsByUsername(r.Context(), username)
+		usernameExists, err := h.UserRepo.ExistsByUsername(r.Context(), username)
 		if err != nil {
 			slog.ErrorContext(r.Context(), "error on checking user by username", "error", err, "username", username)
 			http.Error(w, "error on checking user", http.StatusInternalServerError)
@@ -337,7 +396,7 @@ func (h *Handler) HandleRegister() http.Handler {
 		}
 
 		// FIXME: what to do on security?
-		emailAddressExists, err := h.userRepo.ExistsByEmailAddress(r.Context(), emailAddress)
+		emailAddressExists, err := h.UserRepo.ExistsByEmailAddress(r.Context(), emailAddress)
 		if err != nil {
 			slog.ErrorContext(r.Context(), "error on checking user by email address", "error", err, "emailAddress", emailAddress)
 			http.Error(w, "error on checking user", http.StatusInternalServerError)
@@ -372,7 +431,7 @@ func (h *Handler) HandleRegister() http.Handler {
 			UpdatedAt:    timeNow,
 		}
 
-		err = h.userRepo.Create(r.Context(), user)
+		err = h.UserRepo.Create(r.Context(), user)
 		if err != nil {
 			slog.ErrorContext(r.Context(), "error on create user", "error", err)
 			http.Error(w, "error on create user", http.StatusInternalServerError)
@@ -380,7 +439,7 @@ func (h *Handler) HandleRegister() http.Handler {
 			return
 		}
 
-		session, err := h.cookieStore.Get(r, h.sessionName)
+		session, err := h.CookieStore.Get(r, h.SessionName)
 		if err != nil {
 			slog.ErrorContext(r.Context(), "error on getting session", "error", err)
 			http.Error(w, "error on getting session", http.StatusInternalServerError)
@@ -412,7 +471,7 @@ func (h *Handler) HandleLogoutPage() http.Handler {
 			"CurrentPath":    r.URL.Path,
 		}
 
-		err := h.tmpl.ExecuteTemplate(w, "logout-page.gohtml", data)
+		err := h.Template.ExecuteTemplate(w, "logout-page.gohtml", data)
 		if err != nil {
 			slog.ErrorContext(r.Context(), "failed to execute template", "error", err)
 			http.Error(w, "failed to execute template", http.StatusInternalServerError)
@@ -424,7 +483,7 @@ func (h *Handler) HandleLogoutPage() http.Handler {
 
 func (h *Handler) HandleLogout() http.Handler {
 	hf := http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		session, err := h.cookieStore.Get(r, h.sessionName)
+		session, err := h.CookieStore.Get(r, h.SessionName)
 		if err != nil {
 			slog.ErrorContext(r.Context(), "error on getting session", "error", err)
 			http.Error(w, "error on getting session", http.StatusInternalServerError)
@@ -454,7 +513,7 @@ func (h *Handler) HandleForgotPasswordPage() http.Handler {
 			csrf.TemplateTag: csrf.TemplateField(r),
 		}
 
-		err := h.tmpl.ExecuteTemplate(w, "forgot-password-page.gohtml", data)
+		err := h.Template.ExecuteTemplate(w, "forgot-password-page.gohtml", data)
 		if err != nil {
 			slog.ErrorContext(r.Context(), "failed to execute template", "error", err)
 			http.Error(w, "failed to execute template", http.StatusInternalServerError)
@@ -479,7 +538,7 @@ func (h *Handler) HandleForgotPassword() http.Handler {
 			return
 		}
 
-		user, err := h.userRepo.GetByEmailAddress(r.Context(), emailAddress)
+		user, err := h.UserRepo.GetByEmailAddress(r.Context(), emailAddress)
 		if err != nil {
 			if errors.As(err, &UserByEmailNotFoundError{}) {
 				// Do not reveal if email exists for security
@@ -501,7 +560,7 @@ func (h *Handler) HandleForgotPassword() http.Handler {
 			Token:     resetToken,
 			ExpiresAt: resetTokenExpiry,
 		}
-		if err := h.passwordResetTokenRepo.Create(r.Context(), reset); err != nil {
+		if err := h.PasswordResetTokenRepo.Create(r.Context(), reset); err != nil {
 			slog.ErrorContext(r.Context(), "error saving reset token", "error", err)
 			http.Error(w, "error saving reset token", http.StatusInternalServerError)
 			return
@@ -511,7 +570,7 @@ func (h *Handler) HandleForgotPassword() http.Handler {
 		resetLink := fmt.Sprintf("%s/reset-password?token=%s", getHostURL(r), resetToken)
 		subject := "Password Reset Request"
 		body := fmt.Sprintf("To reset your password, click the following link:\n\n%s\n\nIf you did not request a password reset, you can ignore this email.", resetLink)
-		if err := h.mailer.SendEmail(r.Context(), emailAddress, subject, body); err != nil {
+		if err := h.Mailer.SendEmail(r.Context(), emailAddress, subject, body); err != nil {
 			slog.ErrorContext(r.Context(), "failed to send reset email", "error", err)
 			// Do not reveal error to user
 		}
@@ -546,7 +605,7 @@ func (h *Handler) HandleResetPasswordPage() http.Handler {
 			"Token":          token,
 		}
 
-		err := h.tmpl.ExecuteTemplate(w, "reset-password-page.gohtml", data)
+		err := h.Template.ExecuteTemplate(w, "reset-password-page.gohtml", data)
 		if err != nil {
 			slog.ErrorContext(r.Context(), "failed to execute template", "error", err)
 			http.Error(w, "failed to execute template", http.StatusInternalServerError)
@@ -571,7 +630,7 @@ func (h *Handler) HandleResetPassword() http.Handler {
 			return
 		}
 
-		resetToken, err := h.passwordResetTokenRepo.GetByToken(r.Context(), token)
+		resetToken, err := h.PasswordResetTokenRepo.GetByToken(r.Context(), token)
 		if err != nil {
 			slog.ErrorContext(r.Context(), "invalid or expired reset token", "error", err)
 			http.Error(w, "invalid or expired reset token", http.StatusBadRequest)
@@ -583,7 +642,7 @@ func (h *Handler) HandleResetPassword() http.Handler {
 			return
 		}
 
-		user, err := h.userRepo.GetByID(r.Context(), resetToken.UserID)
+		user, err := h.UserRepo.GetByID(r.Context(), resetToken.UserID)
 		if err != nil {
 			slog.ErrorContext(r.Context(), "user not found for reset token", "error", err)
 			http.Error(w, "user not found", http.StatusInternalServerError)
@@ -610,13 +669,13 @@ func (h *Handler) HandleResetPassword() http.Handler {
 
 		user.PasswordHash = string(newPasswordHash)
 		user.UpdatedAt = time.Now()
-		if err := h.userRepo.Update(r.Context(), user); err != nil {
+		if err := h.UserRepo.Update(r.Context(), user); err != nil {
 			slog.ErrorContext(r.Context(), "error updating user password", "error", err)
 			http.Error(w, "error updating password", http.StatusInternalServerError)
 			return
 		}
 
-		if err := h.passwordResetTokenRepo.Delete(r.Context(), resetToken.ID); err != nil {
+		if err := h.PasswordResetTokenRepo.Delete(r.Context(), resetToken.ID); err != nil {
 			slog.ErrorContext(r.Context(), "error deleting used reset token", "error", err)
 		}
 
@@ -636,7 +695,7 @@ func (h *Handler) HandleProfilePage() http.Handler {
 			"CurrentPath":    r.URL.Path,
 		}
 
-		err := h.tmpl.ExecuteTemplate(w, "profile-page.gohtml", data)
+		err := h.Template.ExecuteTemplate(w, "profile-page.gohtml", data)
 		if err != nil {
 			slog.ErrorContext(r.Context(), "failed to execute template", "error", err)
 			http.Error(w, "failed to execute template", http.StatusInternalServerError)
@@ -665,7 +724,7 @@ func (h *Handler) HandleProfileUpdate() http.Handler {
 		user.EmailAddress = emailAddress
 		user.AvatarURL = avatarURL
 
-		err = h.userRepo.Update(r.Context(), user)
+		err = h.UserRepo.Update(r.Context(), user)
 		if err != nil {
 			slog.ErrorContext(r.Context(), "error on update user", "error", err)
 			http.Error(w, "error on update user", http.StatusInternalServerError)
@@ -717,7 +776,7 @@ func (h *Handler) HandleProfilePasswordUpdate() http.Handler {
 
 		user.PasswordHash = string(newPasswordHash)
 
-		err = h.userRepo.Update(r.Context(), user)
+		err = h.UserRepo.Update(r.Context(), user)
 		if err != nil {
 			slog.ErrorContext(r.Context(), "error on update user", "error", err)
 			http.Error(w, "error on update user", http.StatusInternalServerError)
@@ -733,14 +792,14 @@ func (h *Handler) HandleProfilePasswordUpdate() http.Handler {
 func (h *Handler) HandleViewPostPage() http.Handler {
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		postSlug := r.PathValue("postSlug")
-		post, err := h.postRepo.GetBySlug(r.Context(), postSlug)
+		post, err := h.PostRepo.GetBySlug(r.Context(), postSlug)
 		if err != nil {
 			slog.ErrorContext(r.Context(), "failed to list posts", "error", err)
 			http.Error(w, "failed to list posts", http.StatusInternalServerError)
 			return
 		}
 
-		comments, err := h.commentRepo.List(r.Context(), ListCommentsParams{PostID: post.ID})
+		comments, err := h.CommentRepo.List(r.Context(), ListCommentsParams{PostID: post.ID})
 		if err != nil {
 			slog.ErrorContext(r.Context(), "failed to post comments", "error", err)
 			http.Error(w, "failed to list post comments", http.StatusInternalServerError)
@@ -755,7 +814,7 @@ func (h *Handler) HandleViewPostPage() http.Handler {
 			"PostComments":   comments,
 		}
 
-		err = h.tmpl.ExecuteTemplate(w, "single-post-page.gohtml", data)
+		err = h.Template.ExecuteTemplate(w, "single-post-page.gohtml", data)
 		if err != nil {
 			slog.ErrorContext(r.Context(), "failed to execute template", "error", err)
 			http.Error(w, "failed to execute template", http.StatusInternalServerError)
@@ -771,7 +830,7 @@ func (h *Handler) HandleNewPostPage() http.Handler {
 			"CurrentPath":    r.URL.Path,
 		}
 
-		err := h.tmpl.ExecuteTemplate(w, "new-post-page.gohtml", data)
+		err := h.Template.ExecuteTemplate(w, "new-post-page.gohtml", data)
 		if err != nil {
 			slog.ErrorContext(r.Context(), "failed to execute template", "error", err)
 			http.Error(w, "failed to execute template", http.StatusInternalServerError)
@@ -809,12 +868,12 @@ func (h *Handler) HandleCreatePost() http.Handler {
 		}
 
 		if excerpt == "" {
-			excerpt = h.textPolicy.Sanitize(content)
+			excerpt = h.TextPolicy.Sanitize(content)
 		}
 
 		excerpt = h.generateExcerpt(excerpt, 160)
 
-		content = h.htmlPolicy.Sanitize(content)
+		content = h.HTMLPolicy.Sanitize(content)
 
 		user := userFromContext(r.Context())
 
@@ -831,7 +890,7 @@ func (h *Handler) HandleCreatePost() http.Handler {
 			UpdatedAt: timeNow,
 		}
 
-		err = h.postRepo.Create(r.Context(), post)
+		err = h.PostRepo.Create(r.Context(), post)
 		if err != nil {
 			slog.ErrorContext(r.Context(), "error on create post", "error", err)
 			http.Error(w, "error on create post", http.StatusInternalServerError)
@@ -848,7 +907,7 @@ func (h *Handler) HandleCreatePost() http.Handler {
 func (h *Handler) HandleEditPostPage() http.Handler {
 	hf := http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		postSlug := r.PathValue("postSlug")
-		post, err := h.postRepo.GetBySlug(r.Context(), postSlug)
+		post, err := h.PostRepo.GetBySlug(r.Context(), postSlug)
 		if err != nil {
 			slog.ErrorContext(r.Context(), "error on get post by slug", "error", err, "postSlug", postSlug)
 			http.Error(w, "error on get post by slug", http.StatusInternalServerError)
@@ -871,7 +930,7 @@ func (h *Handler) HandleEditPostPage() http.Handler {
 			"Post":           post,
 		}
 
-		err = h.tmpl.ExecuteTemplate(w, "edit-post-page.gohtml", data)
+		err = h.Template.ExecuteTemplate(w, "edit-post-page.gohtml", data)
 		if err != nil {
 			slog.ErrorContext(r.Context(), "failed to execute template", "error", err)
 			http.Error(w, "failed to execute template", http.StatusInternalServerError)
@@ -883,7 +942,7 @@ func (h *Handler) HandleEditPostPage() http.Handler {
 func (h *Handler) HandleEditPost() http.Handler {
 	hf := http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		postSlug := r.PathValue("postSlug")
-		post, err := h.postRepo.GetBySlug(r.Context(), postSlug)
+		post, err := h.PostRepo.GetBySlug(r.Context(), postSlug)
 		if err != nil {
 			slog.ErrorContext(r.Context(), "error on get post by slug", "error", err, "postSlug", postSlug)
 			http.Error(w, "error on get post by slug", http.StatusInternalServerError)
@@ -927,12 +986,12 @@ func (h *Handler) HandleEditPost() http.Handler {
 		}
 
 		if excerpt == "" {
-			excerpt = h.textPolicy.Sanitize(content)
+			excerpt = h.TextPolicy.Sanitize(content)
 		}
 
 		excerpt = h.generateExcerpt(excerpt, 160)
 
-		content = h.htmlPolicy.Sanitize(content)
+		content = h.HTMLPolicy.Sanitize(content)
 
 		post.Title = title
 		post.Slug = uniqueSlug
@@ -940,7 +999,7 @@ func (h *Handler) HandleEditPost() http.Handler {
 		post.Content = content
 		post.UpdatedAt = time.Now()
 
-		err = h.postRepo.Update(r.Context(), post)
+		err = h.PostRepo.Update(r.Context(), post)
 		if err != nil {
 			slog.ErrorContext(r.Context(), "error on update post", "error", err)
 			http.Error(w, "error on update post", http.StatusInternalServerError)
@@ -957,7 +1016,7 @@ func (h *Handler) HandleEditPost() http.Handler {
 func (h *Handler) HandleDeletePostPage() http.Handler {
 	hf := http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		postSlug := r.PathValue("postSlug")
-		post, err := h.postRepo.GetBySlug(r.Context(), postSlug)
+		post, err := h.PostRepo.GetBySlug(r.Context(), postSlug)
 		if err != nil {
 			slog.ErrorContext(r.Context(), "error on get post by slug", "error", err, "postSlug", postSlug)
 			http.Error(w, "error on get post by slug", http.StatusInternalServerError)
@@ -979,7 +1038,7 @@ func (h *Handler) HandleDeletePostPage() http.Handler {
 			"Post":           post,
 		}
 
-		err = h.tmpl.ExecuteTemplate(w, "delete-post-page.gohtml", data)
+		err = h.Template.ExecuteTemplate(w, "delete-post-page.gohtml", data)
 		if err != nil {
 			slog.ErrorContext(r.Context(), "failed to execute template", "error", err)
 			http.Error(w, "failed to execute template", http.StatusInternalServerError)
@@ -992,7 +1051,7 @@ func (h *Handler) HandleDeletePostPage() http.Handler {
 func (h *Handler) HandleDeletePost() http.Handler {
 	hf := http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		postSlug := r.PathValue("postSlug")
-		post, err := h.postRepo.GetBySlug(r.Context(), postSlug)
+		post, err := h.PostRepo.GetBySlug(r.Context(), postSlug)
 		if err != nil {
 			slog.ErrorContext(r.Context(), "error on get post by slug", "error", err, "postSlug", postSlug)
 			http.Error(w, "error on get post by slug", http.StatusInternalServerError)
@@ -1007,7 +1066,7 @@ func (h *Handler) HandleDeletePost() http.Handler {
 			return
 		}
 
-		err = h.postRepo.Delete(r.Context(), post.ID)
+		err = h.PostRepo.Delete(r.Context(), post.ID)
 		if err != nil {
 			slog.ErrorContext(r.Context(), "error on delete post", "error", err)
 			http.Error(w, "error on delete post", http.StatusInternalServerError)
@@ -1034,11 +1093,11 @@ func (h *Handler) HandleSubmitComment() http.Handler {
 		postID := r.FormValue("postId")
 		content := r.FormValue("content")
 
-		content = h.htmlPolicy.Sanitize(content)
+		content = h.HTMLPolicy.Sanitize(content)
 
 		user := userFromContext(r.Context())
 
-		post, err := h.postRepo.GetByID(r.Context(), postID)
+		post, err := h.PostRepo.GetByID(r.Context(), postID)
 		if err != nil {
 			slog.ErrorContext(r.Context(), "error on get post by id", "error", err, "postId", postID)
 			http.Error(w, "error on get post by id", http.StatusInternalServerError)
@@ -1057,7 +1116,7 @@ func (h *Handler) HandleSubmitComment() http.Handler {
 			UpdatedAt: timeNow,
 		}
 
-		err = h.commentRepo.Create(r.Context(), comment)
+		err = h.CommentRepo.Create(r.Context(), comment)
 		if err != nil {
 			slog.ErrorContext(r.Context(), "error on create comment", "error", err)
 			http.Error(w, "error on create comment", http.StatusInternalServerError)
@@ -1066,7 +1125,7 @@ func (h *Handler) HandleSubmitComment() http.Handler {
 		}
 
 		if r.Header.Get("X-Alpine-Request") == "true" {
-			comments, err := h.commentRepo.List(r.Context(), ListCommentsParams{
+			comments, err := h.CommentRepo.List(r.Context(), ListCommentsParams{
 				PostID: postID,
 			})
 			if err != nil {
@@ -1084,13 +1143,13 @@ func (h *Handler) HandleSubmitComment() http.Handler {
 
 			var buf bytes.Buffer
 
-			if err := h.tmpl.ExecuteTemplate(&buf, "comments-list.gohtml", data); err != nil {
+			if err := h.Template.ExecuteTemplate(&buf, "comments-list.gohtml", data); err != nil {
 				slog.ErrorContext(r.Context(), "error on execute template", "error", err, "template", "comments-list.gohtml")
 				http.Error(w, "error on execute template", http.StatusInternalServerError)
 				return
 			}
 
-			if err := h.tmpl.ExecuteTemplate(&buf, "comment-form.gohtml", data); err != nil {
+			if err := h.Template.ExecuteTemplate(&buf, "comment-form.gohtml", data); err != nil {
 				slog.ErrorContext(r.Context(), "error on execute template", "error", err, "template", "comment-form.gohtml")
 				http.Error(w, "error on execute template", http.StatusInternalServerError)
 				return
@@ -1110,7 +1169,7 @@ func (h *Handler) HandleSubmitComment() http.Handler {
 func (h *Handler) HandleEditCommentPage() http.Handler {
 	hf := http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		commentID := r.PathValue("commentId")
-		comment, err := h.commentRepo.GetByID(r.Context(), commentID)
+		comment, err := h.CommentRepo.GetByID(r.Context(), commentID)
 		if err != nil {
 			slog.ErrorContext(r.Context(), "error on get comment by id", "error", err, "commentId", commentID)
 			http.Error(w, "error on get comment by id", http.StatusInternalServerError)
@@ -1126,7 +1185,7 @@ func (h *Handler) HandleEditCommentPage() http.Handler {
 			return
 		}
 
-		post, err := h.postRepo.GetByID(r.Context(), comment.PostID)
+		post, err := h.PostRepo.GetByID(r.Context(), comment.PostID)
 		if err != nil {
 			slog.ErrorContext(r.Context(), "error on get post by id", "error", err, "postId", comment.PostID)
 			http.Error(w, "error on get post by id", http.StatusInternalServerError)
@@ -1142,7 +1201,7 @@ func (h *Handler) HandleEditCommentPage() http.Handler {
 			"Post":           post,
 		}
 
-		err = h.tmpl.ExecuteTemplate(w, "edit-comment-page.gohtml", data)
+		err = h.Template.ExecuteTemplate(w, "edit-comment-page.gohtml", data)
 		if err != nil {
 			slog.ErrorContext(r.Context(), "failed to execute template", "error", err)
 			http.Error(w, "failed to execute template", http.StatusInternalServerError)
@@ -1166,9 +1225,9 @@ func (h *Handler) HandleEditComment() http.Handler {
 
 		content := r.FormValue("content")
 
-		content = h.htmlPolicy.Sanitize(content)
+		content = h.HTMLPolicy.Sanitize(content)
 
-		comment, err := h.commentRepo.GetByID(r.Context(), commentID)
+		comment, err := h.CommentRepo.GetByID(r.Context(), commentID)
 		if err != nil {
 			slog.ErrorContext(r.Context(), "error on get comment by id", "error", err, "commentId", commentID)
 			http.Error(w, "error on get comment by id", http.StatusInternalServerError)
@@ -1187,7 +1246,7 @@ func (h *Handler) HandleEditComment() http.Handler {
 		comment.Content = content
 		comment.UpdatedAt = time.Now()
 
-		err = h.commentRepo.Update(r.Context(), comment)
+		err = h.CommentRepo.Update(r.Context(), comment)
 		if err != nil {
 			slog.ErrorContext(r.Context(), "error on update comment", "error", err)
 			http.Error(w, "error on update comment", http.StatusInternalServerError)
@@ -1195,7 +1254,7 @@ func (h *Handler) HandleEditComment() http.Handler {
 			return
 		}
 
-		post, err := h.postRepo.GetByID(r.Context(), comment.PostID)
+		post, err := h.PostRepo.GetByID(r.Context(), comment.PostID)
 		if err != nil {
 			slog.ErrorContext(r.Context(), "error on get post by id", "error", err, "postId", comment.PostID)
 			http.Error(w, "error on get post by id", http.StatusInternalServerError)
@@ -1212,7 +1271,7 @@ func (h *Handler) HandleEditComment() http.Handler {
 func (h *Handler) HandleDeleteCommentPage() http.Handler {
 	hf := http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		commentID := r.PathValue("commentId")
-		comment, err := h.commentRepo.GetByID(r.Context(), commentID)
+		comment, err := h.CommentRepo.GetByID(r.Context(), commentID)
 		if err != nil {
 			slog.ErrorContext(r.Context(), "error on get comment by id", "error", err, "commentId", commentID)
 			http.Error(w, "error on get comment by id", http.StatusInternalServerError)
@@ -1228,7 +1287,7 @@ func (h *Handler) HandleDeleteCommentPage() http.Handler {
 			return
 		}
 
-		post, err := h.postRepo.GetByID(r.Context(), comment.PostID)
+		post, err := h.PostRepo.GetByID(r.Context(), comment.PostID)
 		if err != nil {
 			slog.ErrorContext(r.Context(), "error on get post by id", "error", err, "postId", comment.PostID)
 			http.Error(w, "error on get post by id", http.StatusInternalServerError)
@@ -1244,7 +1303,7 @@ func (h *Handler) HandleDeleteCommentPage() http.Handler {
 			"Post":           post,
 		}
 
-		err = h.tmpl.ExecuteTemplate(w, "delete-comment-page.gohtml", data)
+		err = h.Template.ExecuteTemplate(w, "delete-comment-page.gohtml", data)
 		if err != nil {
 			slog.ErrorContext(r.Context(), "failed to execute template", "error", err)
 			http.Error(w, "failed to execute template", http.StatusInternalServerError)
@@ -1258,7 +1317,7 @@ func (h *Handler) HandleDeleteComment() http.Handler {
 	hf := http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		commentID := r.PathValue("commentId")
 
-		comment, err := h.commentRepo.GetByID(r.Context(), commentID)
+		comment, err := h.CommentRepo.GetByID(r.Context(), commentID)
 		if err != nil {
 			slog.ErrorContext(r.Context(), "error on get comment by id", "error", err, "commentId", commentID)
 			http.Error(w, "error on get comment by id", http.StatusInternalServerError)
@@ -1274,7 +1333,7 @@ func (h *Handler) HandleDeleteComment() http.Handler {
 			return
 		}
 
-		err = h.commentRepo.Delete(r.Context(), commentID)
+		err = h.CommentRepo.Delete(r.Context(), commentID)
 		if err != nil {
 			slog.ErrorContext(r.Context(), "error on delete comment", "error", err)
 			http.Error(w, "error on delete comment", http.StatusInternalServerError)
@@ -1282,7 +1341,7 @@ func (h *Handler) HandleDeleteComment() http.Handler {
 			return
 		}
 
-		post, err := h.postRepo.GetByID(r.Context(), comment.PostID)
+		post, err := h.PostRepo.GetByID(r.Context(), comment.PostID)
 		if err != nil {
 			slog.ErrorContext(r.Context(), "error on get post by id", "error", err, "postId", comment.PostID)
 			http.Error(w, "error on get post by id", http.StatusInternalServerError)
@@ -1314,7 +1373,7 @@ func (h *Handler) generateExcerpt(content string, maxLength int) string {
 }
 
 func (h *Handler) generateUniqueSlug(ctx context.Context, baseSlug string) (string, error) {
-	exists, err := h.postRepo.SlugExists(ctx, baseSlug)
+	exists, err := h.PostRepo.SlugExists(ctx, baseSlug)
 	if err != nil {
 		return "", fmt.Errorf("error checking slug existence: %w", err)
 	}
@@ -1337,7 +1396,7 @@ func (h *Handler) generateUniqueSlug(ctx context.Context, baseSlug string) (stri
 
 	for {
 		candidateSlug := basePart + "-" + fmt.Sprintf("%d", counter)
-		exists, err := h.postRepo.SlugExists(ctx, candidateSlug)
+		exists, err := h.PostRepo.SlugExists(ctx, candidateSlug)
 		if err != nil {
 			return "", err
 		}
