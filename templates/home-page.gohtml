@@ -4,26 +4,7 @@
     <nav>
         <h1>My Awesome Blog</h1>
 
-        <ul>
-            {{ if .CurrentUser }}
-            <li>
-                <a href="/posts/new" class="as-link">New Post</a>
-            </li>
-            <li>
-                <a href="/profile" class="as-link">Profile</a>
-            </li>
-            <li>
-                <a href="/logout" class="as-link">Logout</a>
-            </li>
-            {{ else }}
-            <li>
-                <a href="/login" class="as-link">Login</a>
-            </li>
-            <li>
-                <a href="/register" class="as-link">Register</a>
-            </li>
-            {{ end }}
-        </ul>
+        {{ template "header-nav.gohtml" . }}
     </nav>
 </header>
 

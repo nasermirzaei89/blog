@@ -1,0 +1,23 @@
+<ul>
+    {{ if .CurrentUser }}
+    <li>
+        <a href="/posts/new" class="as-link">New Post</a>
+    </li>
+    <li>
+        <a href="/profile" class="as-link">Profile</a>
+    </li>
+    <li x-init @ajax:before="$dispatch('dialog:open')">
+        <a href="/logout" class="as-link" x-target="logout-dialog:logout">Logout</a>
+    </li>
+    <dialog x-init @dialog:open.window="$el.showModal()" class="as-dialog">
+        <div id="logout-dialog"></div>
+    </dialog>
+    {{ else }}
+    <li>
+        <a href="/login" class="as-link">Login</a>
+    </li>
+    <li>
+        <a href="/register" class="as-link">Register</a>
+    </li>
+    {{ end }}
+</ul>

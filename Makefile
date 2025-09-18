@@ -21,8 +21,8 @@ help: ## Show help
 	@which go > /dev/null || (echo "Install Go from https://go.dev/doc/install" & exit 1)
 
 .PHONY: run
-run: .which-go ## Run application
-	go run -v $(ROOT)/cmd/$(APP_NAME)
+run: npm-build build ## Run application
+	$(ROOT)/bin/$(APP_NAME)
 
 .PHONY: build
 build: .which-go ## Build binary

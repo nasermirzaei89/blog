@@ -1,7 +1,7 @@
-<div id="comments-list">
+<div id="comments-list" class="flex flex-col gap-2">
     {{ $currentUser := .CurrentUser }}
     {{ range .PostComments }}
-    <div class="flex flex-col gap-1">
+    <div id="comment-{{ .ID }}" class="flex flex-col gap-1">
         <div class="flex flex-row gap-2">
             <div>
                 <img src="{{ or .UserAvatarURL `https://placehold.co/48` }}" alt="{{ .UserUsername }}"
@@ -22,10 +22,16 @@
         </div>
         {{ if and $currentUser (eq $currentUser.ID .UserID) }}
         <div class="flex flex-row gap-2">
-            <a href="/comments/{{ .ID }}/edit" class="as-link">Edit</a>
-            <a href="/comments/{{ .ID }}/delete" class="as-link">Delete</a>
+            <a href="/comments/{{ .ID }}/edit" class="as-link"
+                x-target="comment-{{ .ID }}:edit-comment-{{ .ID }}">Edit</a>
+            <a href="/comments/{{ .ID }}/delete" class="as-link" x-init
+                @ajax:before="$dispatch('delete-comment-dialog:open')"
+                x-target="delete-comment-dialog:delete-comment-{{ .ID }}">Delete</a>
         </div>
         {{ end }}
     </div>
     {{ end }}
+    <dialog x-init @delete-comment-dialog:open.window="$el.showModal()" class="as-dialog">
+        <div id="delete-comment-dialog"></div>
+    </dialog>
 </div>

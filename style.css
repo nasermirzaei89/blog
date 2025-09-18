@@ -147,3 +147,25 @@ footer {
         @apply prose dark:prose-invert max-w-none min-h-32 px-4 focus:outline-none focus:ring-0;
     }
 }
+
+.as-dialog[open] {
+    @apply backdrop:bg-black/30 backdrop:backdrop-blur-xs;
+    @apply dark:backdrop:bg-white/30;
+    @apply fixed inset-0 flex items-center justify-center top-0 left-0 w-full h-full p-1 bg-transparent;
+
+    > div {
+        @apply min-w-xl rounded-xl p-4 bg-gray-50;
+        @apply bg-gray-50 text-gray-900 font-normal;
+        @apply dark:bg-gray-950 dark:text-gray-100;
+    }
+
+    h1 {
+        @apply text-xl;
+    }
+}
+
+#comments-list {
+    h1 {
+        @apply text-xl;
+    }
+}

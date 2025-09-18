@@ -3,7 +3,7 @@
 {{ template "header.gohtml" . }}
 
 <main>
-    <div class="flex flex-col gap-1">
+    <div id="logout" class="flex flex-col gap-1">
         <h1 class="text-3xl">
             Logout
         </h1>
@@ -14,7 +14,7 @@
             </div>
             <div class="flex flex-row gap-2">
                 <button type="submit" class="as-button">Sign Out</button>
-                <a href="/" class="as-button variant-plain">Cancel</a>
+                <a href="/" class="as-button variant-plain" @click.prevent="$el.closest('dialog').close()">Cancel</a>
             </div>
         </form>
     </div>

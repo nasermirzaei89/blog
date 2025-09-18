@@ -3,18 +3,20 @@
 {{ template "header.gohtml" . }}
 
 <main>
-    <div class="flex flex-col gap-1">
+    <div id="delete-comment-{{ .Comment.ID }}" class="flex flex-col gap-1">
         <h1 class="text-3xl">
             Delete Comment
         </h1>
-        <form method="POST" action="/comments/{{ .Comment.ID }}/delete" class="flex flex-col gap-2">
+        <form method="POST" action="/comments/{{ .Comment.ID }}/delete" class="flex flex-col gap-2"
+            x-target="comments-list">
             {{ .csrfField }}
             <div>
                 Are you sure you want to delete this comment?
             </div>
             <div class="flex flex-row gap-2">
                 <button type="submit" class="as-button">Yes, Delete It</button>
-                <a href="/posts/{{ .Post.Slug }}" class="as-button variant-plain">Cancel</a>
+                <a href="/posts/{{ .Post.Slug }}" class="as-button variant-plain"
+                    @click.prevent="$el.closest('dialog').close()">Cancel</a>
             </div>
         </form>
     </div>
