@@ -9,7 +9,7 @@ IMAGE_TAG?=latest
 
 .DEFAULT_GOAL := .default
 
-.default: npm-build format build test
+.default: format build test
 
 .PHONY: help
 help: ## Show help
@@ -21,11 +21,11 @@ help: ## Show help
 	@which go > /dev/null || (echo "Install Go from https://go.dev/doc/install" & exit 1)
 
 .PHONY: run
-run: npm-build build ## Run application
+run: build ## Run application
 	$(ROOT)/bin/$(APP_NAME)
 
 .PHONY: build
-build: .which-go ## Build binary
+build: npm-build .which-go ## Build binary
 	CGO_ENABLED=1 go build -v -o $(ROOT)/bin/$(APP_NAME) $(ROOT)/cmd/$(APP_NAME)
 
 .PHONY: format

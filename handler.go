@@ -304,8 +304,6 @@ func (h *Handler) renderTemplate(w http.ResponseWriter, r *http.Request, name st
 		"Dir":           "ltr",
 	}
 
-	slog.Info("Rendering template", "name", name, "user", data["CurrentUser"], "path", data["CurrentPath"], "notifications", len(data["Notifications"].([]Notification)))
-
 	maps.Copy(data, extraData)
 
 	// Clear notifications after rendering (flash message behavior)

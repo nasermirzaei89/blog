@@ -1,7 +1,11 @@
 <div id="notifications" x-sync x-merge="prepend">
     {{ if .Notifications }}
     {{ range .Notifications }}
-    <div class="as-notification is-{{ .Type }}">
+    <div class="as-notification is-{{ .Type }}" x-data="{ show: false }" x-show="show"
+        x-transition:enter="transform transition ease-out" x-transition:enter-start="translate-x-full opacity-0"
+        x-transition:enter-end="translate-x-0 opacity-100" x-transition:leave="transform transition ease-in"
+        x-transition:leave-start="translate-x-0 opacity-100" x-transition:leave-end="translate-x-full opacity-0"
+        x-init="setTimeout(() => show = true, 1), setTimeout(() => show = false, 5000), setTimeout(() => $el.remove(), 6000)">
         {{ .Message }}
     </div>
     {{ end }}
