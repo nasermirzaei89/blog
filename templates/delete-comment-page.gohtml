@@ -1,4 +1,4 @@
-{{ template "page-header.gohtml" }}
+{{ template "page-header.gohtml" . }}
 
 {{ template "header.gohtml" . }}
 
@@ -7,7 +7,7 @@
         <h1 class="text-3xl">
             Delete Comment
         </h1>
-        <form method="POST" action="/comments/{{ .Comment.ID }}/delete" class="flex flex-col gap-2"
+        <form method="post" action="/comments/{{ .Comment.ID }}/delete" class="flex flex-col gap-2"
             x-target="comments-list">
             {{ .csrfField }}
             <div>
@@ -24,4 +24,4 @@
 
 {{ template "footer.gohtml" }}
 
-{{ template "page-footer.gohtml" }}
+{{ template "page-footer.gohtml" . }}

@@ -1,4 +1,4 @@
-{{ template "page-header.gohtml" }}
+{{ template "page-header.gohtml" . }}
 
 {{ template "header.gohtml" . }}
 
@@ -7,7 +7,7 @@
         <h1 class="text-3xl">
             Delete Post
         </h1>
-        <form method="POST" action="/posts/{{ .Post.Slug }}/delete" class="flex flex-col gap-2">
+        <form method="post" action="/posts/{{ .Post.Slug }}/delete" class="flex flex-col gap-2">
             {{ .csrfField }}
             <div>
                 Are you sure you want to delete this post?
@@ -22,4 +22,4 @@
 
 {{ template "footer.gohtml" }}
 
-{{ template "page-footer.gohtml" }}
+{{ template "page-footer.gohtml" . }}

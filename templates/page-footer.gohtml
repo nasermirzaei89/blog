@@ -1,3 +1,12 @@
+<div id="notifications" x-sync x-merge="prepend">
+    {{ if .Notifications }}
+    {{ range .Notifications }}
+    <div class="as-notification is-{{ .Type }}">
+        {{ .Message }}
+    </div>
+    {{ end }}
+    {{ end }}
+</div>
 </body>
 
 </html>

@@ -86,7 +86,7 @@ Alpine.start()
 ### HTML Templates
 ```html
 <!-- Always provide fallback form actions -->
-<form method="POST" action="/comments" x-target="comments-list comment-form">
+<form method="post" action="/comments" x-target="comments-list comment-form">
     <!-- Form works without JS, enhanced with Alpine AJAX -->
 </form>
 

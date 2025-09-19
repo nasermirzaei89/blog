@@ -5,12 +5,14 @@ import (
 	"log/slog"
 	"os"
 
+	"github.com/MatusOllah/slogcolor"
 	"github.com/nasermirzaei89/blog"
 	"github.com/nasermirzaei89/env"
 )
 
 func main() {
 	slog.SetLogLoggerLevel(getLogLevelFromEnv())
+	slog.SetDefault(slog.New(slogcolor.NewHandler(os.Stderr, slogcolor.DefaultOptions)))
 
 	slog.Info("starting app...")
 

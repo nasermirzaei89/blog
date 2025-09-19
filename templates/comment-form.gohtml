@@ -1,6 +1,6 @@
 <div id="comment-form">
     {{ if .CurrentUser }}
-    <form method="POST" action="/comments" class="flex flex-col gap-2" x-target="comments-list comment-form"
+    <form method="post" action="/comments" class="flex flex-col gap-2" x-target="comments-list comment-form"
         x-target.422="comment-form">
         {{ .csrfField }}
         <input type="hidden" name="postId" value="{{ .Post.ID }}" required>

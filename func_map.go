@@ -22,10 +22,4 @@ var Funcs = template.FuncMap{
 	"add": func(a, b int) int {
 		return a + b
 	},
-	"_lang": func() string {
-		return "en"
-	},
-	"_dir": func() string {
-		return "ltr"
-	},
 }

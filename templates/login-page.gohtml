@@ -1,17 +1,17 @@
-{{ template "page-header.gohtml" }}
+{{ template "page-header.gohtml" . }}
 
 {{ template "header.gohtml" }}
 
 <main>
-    <div class="flex flex-col gap-1">
+    <div id="login" class="flex flex-col gap-1">
         <h1 class="text-3xl">
             Login
         </h1>
-        <form method="POST" action="/login" class="flex flex-col gap-2">
+        <form method="post" action="/login" class="flex flex-col gap-2" x-target="login" x-target.away="_top">
             {{ .csrfField }}
             <div class="as-text-field">
                 <label for="username">Username</label>
-                <input type="text" name="username" id="username" class="as-text-input" required autocomplete="username">
+                <input type="text" name="username" id="username" class="as-text-input" required autocomplete="username" autofocus>
             </div>
             <div class="as-text-field">
                 <label for="password">Password</label>
@@ -33,4 +33,4 @@
 
 {{ template "footer.gohtml" }}
 
-{{ template "page-footer.gohtml" }}
+{{ template "page-footer.gohtml" . }}

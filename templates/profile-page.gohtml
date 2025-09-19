@@ -1,11 +1,11 @@
-{{ template "page-header.gohtml" }}
+{{ template "page-header.gohtml" . }}
 
 {{ template "header.gohtml" . }}
 
 <main class="gap-4 max-w-xl mx-auto py-8">
     <section class="mb-8">
         <h2 class="text-xl font-semibold mb-4">Profile Information</h2>
-        <form method="POST" action="/profile" class="flex flex-col gap-2" autocomplete="off">
+        <form method="post" action="/profile" class="flex flex-col gap-2" autocomplete="off" id="profile-info-form" x-target="profile-info-form">
             {{ .csrfField }}
             <div class="as-text-field">
                 <label for="name" class="block text-sm font-medium">Name</label>
@@ -28,7 +28,7 @@
     </section>
     <section>
         <h2 class="text-xl font-semibold mb-4">Change Password</h2>
-        <form method="POST" action="/profile/password" class="flex flex-col gap-2">
+        <form method="post" action="/profile/password" class="flex flex-col gap-2" id="profile-password-form" x-target="profile-password-form">
             {{ .csrfField }}
             <div class="as-text-field">
                 <label for="currentPassword" class="block text-sm font-medium">Current Password</label>
@@ -54,4 +54,4 @@
 
 {{ template "footer.gohtml" }}
 
-{{ template "page-footer.gohtml" }}
+{{ template "page-footer.gohtml" . }}

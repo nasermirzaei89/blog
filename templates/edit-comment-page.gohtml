@@ -1,4 +1,4 @@
-{{ template "page-header.gohtml" }}
+{{ template "page-header.gohtml" . }}
 
 {{ template "header.gohtml" . }}
 
@@ -7,12 +7,12 @@
         <h1 class="text-3xl">
             Edit Comment
         </h1>
-        <form method="POST" action="/comments/{{ .Comment.ID }}/edit" class="flex flex-col gap-2"
+        <form method="post" action="/comments/{{ .Comment.ID }}/edit" class="flex flex-col gap-2"
             x-target="comments-list">
             {{ .csrfField }}
             <div class="as-text-field">
                 <label for="content">Comment</label>
-                <textarea name="content" id="content" class="as-textarea" required>{{ .Comment.Content }}</textarea>
+                <textarea name="content" id="content" class="as-textarea" required autofocus>{{ .Comment.Content }}</textarea>
             </div>
             <div class="flex flex-row gap-2">
                 <button type="submit" class="as-button">Update</button>
@@ -24,4 +24,4 @@
 
 {{ template "footer.gohtml" }}
 
-{{ template "page-footer.gohtml" }}
+{{ template "page-footer.gohtml" . }}

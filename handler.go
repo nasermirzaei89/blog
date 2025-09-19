@@ -1,13 +1,14 @@
 package blog
 
 import (
-	"bytes"
 	"context"
+	"encoding/gob"
 	"errors"
 	"fmt"
 	"html/template"
 	"io/fs"
 	"log/slog"
+	"maps"
 	"net/http"
 	"runtime/debug"
 	"strconv"
@@ -46,6 +47,25 @@ type Handler struct {
 type contextKeyUserType struct{}
 
 var contextKeyUser = contextKeyUserType{}
+
+type NotificationType string
+
+const (
+	NotificationTypeInfo    NotificationType = "info"
+	NotificationTypeWarning NotificationType = "warning"
+	NotificationTypeError   NotificationType = "error"
+	NotificationTypeSuccess NotificationType = "success"
+)
+
+type Notification struct {
+	Type    NotificationType
+	Message string
+}
+
+func init() {
+	// Register type for gob encoding
+	gob.Register([]Notification{})
+}
 
 var _ http.Handler = (*Handler)(nil)
 
@@ -102,6 +122,58 @@ func (h *Handler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 	h.handler.ServeHTTP(w, r)
 }
 
+type SessionValueNotFoundError struct {
+	Key string
+}
+
+func (err SessionValueNotFoundError) Error() string {
+	return fmt.Sprintf("session value not found for key: %s", err.Key)
+}
+
+func (h *Handler) getSessionValue(r *http.Request, key string) (any, error) {
+	session, err := h.CookieStore.Get(r, h.SessionName)
+	if err != nil {
+		return nil, fmt.Errorf("error getting session: %w", err)
+	}
+
+	value, ok := session.Values[key]
+	if !ok {
+		return nil, SessionValueNotFoundError{Key: key}
+	}
+
+	return value, nil
+}
+
+func (h *Handler) setSessionValue(w http.ResponseWriter, r *http.Request, key string, value any) error {
+	session, err := h.CookieStore.Get(r, h.SessionName)
+	if err != nil {
+		return fmt.Errorf("error getting session: %w", err)
+	}
+
+	session.Values[key] = value
+	err = session.Save(r, w)
+	if err != nil {
+		return fmt.Errorf("error saving session: %w", err)
+	}
+
+	return nil
+}
+
+func (h *Handler) deleteSessionValue(w http.ResponseWriter, r *http.Request, key string) error {
+	session, err := h.CookieStore.Get(r, h.SessionName)
+	if err != nil {
+		return fmt.Errorf("error getting session: %w", err)
+	}
+
+	delete(session.Values, key)
+	err = session.Save(r, w)
+	if err != nil {
+		return fmt.Errorf("error saving session: %w", err)
+	}
+
+	return nil
+}
+
 func (h *Handler) RecoverMW(next http.Handler) http.Handler {
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		defer func() {
@@ -117,22 +189,22 @@ func (h *Handler) RecoverMW(next http.Handler) http.Handler {
 func (h *Handler) AuthMiddleware() func(http.Handler) http.Handler {
 	return func(next http.Handler) http.Handler {
 		return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-			session, err := h.CookieStore.Get(r, h.SessionName)
-			if err != nil {
-				slog.ErrorContext(r.Context(), "error on getting session", "error", err)
-				http.Error(w, "error on getting session", http.StatusInternalServerError)
+			username, err := h.getSessionValue(r, "username")
+			if err != nil && !errors.As(err, &SessionValueNotFoundError{}) {
+				slog.ErrorContext(r.Context(), "error on getting session value", "key", "username", "error", err)
+				http.Error(w, "error on getting session value", http.StatusInternalServerError)
 				return
 			}
 
-			if username := session.Values["username"]; username != nil && username.(string) != "" {
+			if username != nil && username.(string) != "" {
 				user, err := h.UserRepo.GetByUsername(r.Context(), username.(string))
 				if err != nil {
 					if errors.As(err, &UserByUsernameNotFoundError{}) {
-						session.Values["username"] = nil
-
-						err = session.Save(r, w)
+						err = h.deleteSessionValue(w, r, "username")
 						if err != nil {
-							slog.ErrorContext(r.Context(), "error on saving session", "error", err)
+							slog.ErrorContext(r.Context(), "error on deleting session value", "key", "username", "error", err)
+							http.Error(w, "error on deleting session value", http.StatusInternalServerError)
+							return
 						}
 
 						next.ServeHTTP(w, r)
@@ -162,6 +234,45 @@ func userFromContext(ctx context.Context) *User {
 	return user
 }
 
+func (h *Handler) notificationsFromSession(r *http.Request) []Notification {
+	notifications, err := h.getSessionValue(r, "notifications")
+	if err != nil {
+		return nil
+	}
+
+	if notifications == nil {
+		return nil
+	}
+
+	notificationSlice, ok := notifications.([]Notification)
+	if !ok {
+		return nil
+	}
+
+	return notificationSlice
+}
+
+func (h *Handler) addNotificationToSession(w http.ResponseWriter, r *http.Request, n Notification) error {
+	notifications, err := h.getSessionValue(r, "notifications")
+	if err != nil {
+		notifications = []Notification{}
+	}
+
+	var notificationSlice []Notification
+	if notifications != nil {
+		if slice, ok := notifications.([]Notification); ok {
+			notificationSlice = slice
+		}
+	}
+
+	notificationSlice = append(notificationSlice, n)
+	return h.setSessionValue(w, r, "notifications", notificationSlice)
+}
+
+func (h *Handler) clearNotificationsFromSession(w http.ResponseWriter, r *http.Request) error {
+	return h.deleteSessionValue(w, r, "notifications")
+}
+
 func (h *Handler) AuthenticatedOnly(next http.Handler) http.Handler {
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		if userFromContext(r.Context()) == nil {
@@ -182,6 +293,29 @@ func (h *Handler) GuestOnly(next http.Handler) http.Handler {
 
 		next.ServeHTTP(w, r)
 	})
+}
+
+func (h *Handler) renderTemplate(w http.ResponseWriter, r *http.Request, name string, extraData map[string]any) {
+	data := map[string]any{
+		"CurrentUser":   userFromContext(r.Context()),
+		"CurrentPath":   r.URL.Path,
+		"Notifications": h.notificationsFromSession(r),
+		"Lang":          "en",
+		"Dir":           "ltr",
+	}
+
+	slog.Info("Rendering template", "name", name, "user", data["CurrentUser"], "path", data["CurrentPath"], "notifications", len(data["Notifications"].([]Notification)))
+
+	maps.Copy(data, extraData)
+
+	// Clear notifications after rendering (flash message behavior)
+	h.clearNotificationsFromSession(w, r)
+
+	err := h.Template.ExecuteTemplate(w, name, data)
+	if err != nil {
+		slog.ErrorContext(r.Context(), "failed to execute template", "error", err)
+		http.Error(w, "failed to execute template", http.StatusInternalServerError)
+	}
 }
 
 func (h *Handler) HandleStatic(w http.ResponseWriter, r *http.Request) {
@@ -252,33 +386,21 @@ func (h *Handler) HandleHomePage(w http.ResponseWriter, r *http.Request) {
 	totalPages := (totalPosts + listPostsParams.Limit - 1) / listPostsParams.Limit
 
 	data := map[string]any{
-		"CurrentUser": userFromContext(r.Context()),
-		"CurrentPath": r.URL.Path,
 		"Posts":       posts,
 		"CurrentPage": pageNum,
 		"TotalPages":  totalPages,
 	}
 
-	err = h.Template.ExecuteTemplate(w, "home-page.gohtml", data)
-	if err != nil {
-		slog.ErrorContext(r.Context(), "failed to execute template", "error", err)
-		http.Error(w, "failed to execute template", http.StatusInternalServerError)
-	}
+	h.renderTemplate(w, r, "home-page.gohtml", data)
 }
 
 func (h *Handler) HandleLoginPage() http.Handler {
 	hf := http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		data := map[string]any{
 			csrf.TemplateTag: csrf.TemplateField(r),
-			"CurrentUser":    userFromContext(r.Context()),
-			"CurrentPath":    r.URL.Path,
 		}
 
-		err := h.Template.ExecuteTemplate(w, "login-page.gohtml", data)
-		if err != nil {
-			slog.ErrorContext(r.Context(), "failed to execute template", "error", err)
-			http.Error(w, "failed to execute template", http.StatusInternalServerError)
-		}
+		h.renderTemplate(w, r, "login-page.gohtml", data)
 	})
 
 	return h.GuestOnly(hf)
@@ -300,7 +422,16 @@ func (h *Handler) HandleLogin() http.Handler {
 		user, err := h.UserRepo.GetByUsername(r.Context(), username)
 		if err != nil {
 			if errors.As(err, &UserByUsernameNotFoundError{}) {
-				http.Error(w, "invalid username or password", http.StatusUnauthorized)
+				err = h.addNotificationToSession(w, r, Notification{
+					Message: "Invalid username or password.",
+					Type:    NotificationTypeError,
+				})
+				if err != nil {
+					slog.ErrorContext(r.Context(), "error adding notification to session", "error", err)
+				}
+				w.WriteHeader(http.StatusUnauthorized)
+				h.HandleLoginPage().ServeHTTP(w, r)
+
 				return
 			}
 
@@ -312,27 +443,32 @@ func (h *Handler) HandleLogin() http.Handler {
 
 		err = bcrypt.CompareHashAndPassword([]byte(user.PasswordHash), []byte(password))
 		if err != nil {
-			http.Error(w, "invalid username or password", http.StatusUnauthorized)
+			err = h.addNotificationToSession(w, r, Notification{
+				Message: "Invalid username or password.",
+				Type:    NotificationTypeError,
+			})
+			if err != nil {
+				slog.ErrorContext(r.Context(), "error adding notification to session", "error", err)
+			}
+			w.WriteHeader(http.StatusUnauthorized)
+			h.HandleLoginPage().ServeHTTP(w, r)
 
 			return
 		}
 
-		session, err := h.CookieStore.Get(r, h.SessionName)
+		err = h.setSessionValue(w, r, "username", user.Username)
 		if err != nil {
-			slog.ErrorContext(r.Context(), "error on getting session", "error", err)
-			http.Error(w, "error on getting session", http.StatusInternalServerError)
-
+			slog.ErrorContext(r.Context(), "error on setting session value", "key", "username", "error", err)
+			http.Error(w, "error on setting session value", http.StatusInternalServerError)
 			return
 		}
 
-		session.Values["username"] = user.Username
-
-		err = session.Save(r, w)
+		err = h.addNotificationToSession(w, r, Notification{
+			Message: "Logged in successfully.",
+			Type:    NotificationTypeSuccess,
+		})
 		if err != nil {
-			slog.ErrorContext(r.Context(), "error on saving session", "error", err)
-			http.Error(w, "error on saving session", http.StatusInternalServerError)
-
-			return
+			slog.ErrorContext(r.Context(), "error adding notification to session", "error", err)
 		}
 
 		http.Redirect(w, r, "/", http.StatusSeeOther)
@@ -345,15 +481,9 @@ func (h *Handler) HandleRegisterPage() http.Handler {
 	hf := http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		data := map[string]any{
 			csrf.TemplateTag: csrf.TemplateField(r),
-			"CurrentUser":    userFromContext(r.Context()),
-			"CurrentPath":    r.URL.Path,
 		}
 
-		err := h.Template.ExecuteTemplate(w, "register-page.gohtml", data)
-		if err != nil {
-			slog.ErrorContext(r.Context(), "failed to execute template", "error", err)
-			http.Error(w, "failed to execute template", http.StatusInternalServerError)
-		}
+		h.renderTemplate(w, r, "register-page.gohtml", data)
 	})
 
 	return h.GuestOnly(hf)
@@ -439,22 +569,19 @@ func (h *Handler) HandleRegister() http.Handler {
 			return
 		}
 
-		session, err := h.CookieStore.Get(r, h.SessionName)
+		err = h.setSessionValue(w, r, "username", user.Username)
 		if err != nil {
-			slog.ErrorContext(r.Context(), "error on getting session", "error", err)
-			http.Error(w, "error on getting session", http.StatusInternalServerError)
-
+			slog.ErrorContext(r.Context(), "error on setting session value", "key", "username", "error", err)
+			http.Error(w, "error on setting session value", http.StatusInternalServerError)
 			return
 		}
 
-		session.Values["username"] = user.Username
-
-		err = session.Save(r, w)
+		err = h.addNotificationToSession(w, r, Notification{
+			Message: "User has been registered successfully.",
+			Type:    NotificationTypeSuccess,
+		})
 		if err != nil {
-			slog.ErrorContext(r.Context(), "error on saving session", "error", err)
-			http.Error(w, "error on saving session", http.StatusInternalServerError)
-
-			return
+			slog.ErrorContext(r.Context(), "error adding notification to session", "error", err)
 		}
 
 		http.Redirect(w, r, "/", http.StatusSeeOther)
@@ -467,15 +594,9 @@ func (h *Handler) HandleLogoutPage() http.Handler {
 	hf := http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		data := map[string]any{
 			csrf.TemplateTag: csrf.TemplateField(r),
-			"CurrentUser":    userFromContext(r.Context()),
-			"CurrentPath":    r.URL.Path,
 		}
 
-		err := h.Template.ExecuteTemplate(w, "logout-page.gohtml", data)
-		if err != nil {
-			slog.ErrorContext(r.Context(), "failed to execute template", "error", err)
-			http.Error(w, "failed to execute template", http.StatusInternalServerError)
-		}
+		h.renderTemplate(w, r, "logout-page.gohtml", data)
 	})
 
 	return h.AuthenticatedOnly(hf)
@@ -483,22 +604,19 @@ func (h *Handler) HandleLogoutPage() http.Handler {
 
 func (h *Handler) HandleLogout() http.Handler {
 	hf := http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		session, err := h.CookieStore.Get(r, h.SessionName)
+		err := h.deleteSessionValue(w, r, "username")
 		if err != nil {
-			slog.ErrorContext(r.Context(), "error on getting session", "error", err)
-			http.Error(w, "error on getting session", http.StatusInternalServerError)
-
+			slog.ErrorContext(r.Context(), "error on deleting session value", "key", "username", "error", err)
+			http.Error(w, "error on deleting session value", http.StatusInternalServerError)
 			return
 		}
 
-		session.Values["username"] = nil
-
-		err = session.Save(r, w)
+		err = h.addNotificationToSession(w, r, Notification{
+			Message: "Logged out successfully.",
+			Type:    NotificationTypeSuccess,
+		})
 		if err != nil {
-			slog.ErrorContext(r.Context(), "error on saving session", "error", err)
-			http.Error(w, "error on saving session", http.StatusInternalServerError)
-
-			return
+			slog.ErrorContext(r.Context(), "error adding notification to session", "error", err)
 		}
 
 		http.Redirect(w, r, "/", http.StatusSeeOther)
@@ -513,11 +631,7 @@ func (h *Handler) HandleForgotPasswordPage() http.Handler {
 			csrf.TemplateTag: csrf.TemplateField(r),
 		}
 
-		err := h.Template.ExecuteTemplate(w, "forgot-password-page.gohtml", data)
-		if err != nil {
-			slog.ErrorContext(r.Context(), "failed to execute template", "error", err)
-			http.Error(w, "failed to execute template", http.StatusInternalServerError)
-		}
+		h.renderTemplate(w, r, "forgot-password-page.gohtml", data)
 	})
 
 	return h.GuestOnly(hf)
@@ -575,6 +689,14 @@ func (h *Handler) HandleForgotPassword() http.Handler {
 			// Do not reveal error to user
 		}
 
+		err = h.addNotificationToSession(w, r, Notification{
+			Message: "Reset password link has been sent successfully.",
+			Type:    NotificationTypeSuccess,
+		})
+		if err != nil {
+			slog.ErrorContext(r.Context(), "error adding notification to session", "error", err)
+		}
+
 		http.Redirect(w, r, "/", http.StatusSeeOther)
 	})
 
@@ -605,11 +727,7 @@ func (h *Handler) HandleResetPasswordPage() http.Handler {
 			"Token":          token,
 		}
 
-		err := h.Template.ExecuteTemplate(w, "reset-password-page.gohtml", data)
-		if err != nil {
-			slog.ErrorContext(r.Context(), "failed to execute template", "error", err)
-			http.Error(w, "failed to execute template", http.StatusInternalServerError)
-		}
+		h.renderTemplate(w, r, "reset-password-page.gohtml", data)
 	})
 
 	return h.GuestOnly(hf)
@@ -679,6 +797,14 @@ func (h *Handler) HandleResetPassword() http.Handler {
 			slog.ErrorContext(r.Context(), "error deleting used reset token", "error", err)
 		}
 
+		err = h.addNotificationToSession(w, r, Notification{
+			Message: "Password has been reset successfully.",
+			Type:    NotificationTypeSuccess,
+		})
+		if err != nil {
+			slog.ErrorContext(r.Context(), "error adding notification to session", "error", err)
+		}
+
 		http.Redirect(w, r, "/", http.StatusSeeOther)
 	})
 
@@ -687,19 +813,11 @@ func (h *Handler) HandleResetPassword() http.Handler {
 
 func (h *Handler) HandleProfilePage() http.Handler {
 	hf := http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		user := userFromContext(r.Context())
-
 		data := map[string]any{
 			csrf.TemplateTag: csrf.TemplateField(r),
-			"CurrentUser":    user,
-			"CurrentPath":    r.URL.Path,
 		}
 
-		err := h.Template.ExecuteTemplate(w, "profile-page.gohtml", data)
-		if err != nil {
-			slog.ErrorContext(r.Context(), "failed to execute template", "error", err)
-			http.Error(w, "failed to execute template", http.StatusInternalServerError)
-		}
+		h.renderTemplate(w, r, "profile-page.gohtml", data)
 	})
 
 	return h.AuthenticatedOnly(hf)
@@ -729,6 +847,14 @@ func (h *Handler) HandleProfileUpdate() http.Handler {
 			slog.ErrorContext(r.Context(), "error on update user", "error", err)
 			http.Error(w, "error on update user", http.StatusInternalServerError)
 			return
+		}
+
+		err = h.addNotificationToSession(w, r, Notification{
+			Message: "Profile has been updated successfully.",
+			Type:    NotificationTypeSuccess,
+		})
+		if err != nil {
+			slog.ErrorContext(r.Context(), "error adding notification to session", "error", err)
 		}
 
 		http.Redirect(w, r, "/profile", http.StatusSeeOther)
@@ -783,6 +909,14 @@ func (h *Handler) HandleProfilePasswordUpdate() http.Handler {
 			return
 		}
 
+		err = h.addNotificationToSession(w, r, Notification{
+			Message: "Password has been updated successfully.",
+			Type:    NotificationTypeSuccess,
+		})
+		if err != nil {
+			slog.ErrorContext(r.Context(), "error adding notification to session", "error", err)
+		}
+
 		http.Redirect(w, r, "/profile", http.StatusSeeOther)
 	})
 
@@ -808,17 +942,11 @@ func (h *Handler) HandleViewPostPage() http.Handler {
 
 		data := map[string]any{
 			csrf.TemplateTag: csrf.TemplateField(r),
-			"CurrentUser":    userFromContext(r.Context()),
-			"CurrentPath":    r.URL.Path,
 			"Post":           post,
 			"PostComments":   comments,
 		}
 
-		err = h.Template.ExecuteTemplate(w, "single-post-page.gohtml", data)
-		if err != nil {
-			slog.ErrorContext(r.Context(), "failed to execute template", "error", err)
-			http.Error(w, "failed to execute template", http.StatusInternalServerError)
-		}
+		h.renderTemplate(w, r, "single-post-page.gohtml", data)
 	})
 }
 
@@ -826,15 +954,9 @@ func (h *Handler) HandleNewPostPage() http.Handler {
 	hf := http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		data := map[string]any{
 			csrf.TemplateTag: csrf.TemplateField(r),
-			"CurrentUser":    userFromContext(r.Context()),
-			"CurrentPath":    r.URL.Path,
 		}
 
-		err := h.Template.ExecuteTemplate(w, "new-post-page.gohtml", data)
-		if err != nil {
-			slog.ErrorContext(r.Context(), "failed to execute template", "error", err)
-			http.Error(w, "failed to execute template", http.StatusInternalServerError)
-		}
+		h.renderTemplate(w, r, "new-post-page.gohtml", data)
 	})
 
 	return h.AuthenticatedOnly(hf)
@@ -898,6 +1020,14 @@ func (h *Handler) HandleCreatePost() http.Handler {
 			return
 		}
 
+		err = h.addNotificationToSession(w, r, Notification{
+			Message: "Post has been created successfully.",
+			Type:    NotificationTypeSuccess,
+		})
+		if err != nil {
+			slog.ErrorContext(r.Context(), "error adding notification to session", "error", err)
+		}
+
 		http.Redirect(w, r, "/posts/"+post.Slug, http.StatusSeeOther)
 	})
 
@@ -925,16 +1055,10 @@ func (h *Handler) HandleEditPostPage() http.Handler {
 
 		data := map[string]any{
 			csrf.TemplateTag: csrf.TemplateField(r),
-			"CurrentUser":    user,
-			"CurrentPath":    r.URL.Path,
 			"Post":           post,
 		}
 
-		err = h.Template.ExecuteTemplate(w, "edit-post-page.gohtml", data)
-		if err != nil {
-			slog.ErrorContext(r.Context(), "failed to execute template", "error", err)
-			http.Error(w, "failed to execute template", http.StatusInternalServerError)
-		}
+		h.renderTemplate(w, r, "edit-post-page.gohtml", data)
 	})
 	return h.AuthenticatedOnly(hf)
 }
@@ -1007,6 +1131,14 @@ func (h *Handler) HandleEditPost() http.Handler {
 			return
 		}
 
+		err = h.addNotificationToSession(w, r, Notification{
+			Message: "Post has been updated successfully.",
+			Type:    NotificationTypeSuccess,
+		})
+		if err != nil {
+			slog.ErrorContext(r.Context(), "error adding notification to session", "error", err)
+		}
+
 		http.Redirect(w, r, "/posts/"+post.Slug, http.StatusSeeOther)
 	})
 
@@ -1033,16 +1165,10 @@ func (h *Handler) HandleDeletePostPage() http.Handler {
 
 		data := map[string]any{
 			csrf.TemplateTag: csrf.TemplateField(r),
-			"CurrentUser":    user,
-			"CurrentPath":    r.URL.Path,
 			"Post":           post,
 		}
 
-		err = h.Template.ExecuteTemplate(w, "delete-post-page.gohtml", data)
-		if err != nil {
-			slog.ErrorContext(r.Context(), "failed to execute template", "error", err)
-			http.Error(w, "failed to execute template", http.StatusInternalServerError)
-		}
+		h.renderTemplate(w, r, "delete-post-page.gohtml", data)
 	})
 
 	return h.AuthenticatedOnly(hf)
@@ -1072,6 +1198,14 @@ func (h *Handler) HandleDeletePost() http.Handler {
 			http.Error(w, "error on delete post", http.StatusInternalServerError)
 
 			return
+		}
+
+		err = h.addNotificationToSession(w, r, Notification{
+			Message: "Post has been deleted successfully.",
+			Type:    NotificationTypeSuccess,
+		})
+		if err != nil {
+			slog.ErrorContext(r.Context(), "error adding notification to session", "error", err)
 		}
 
 		http.Redirect(w, r, "/", http.StatusSeeOther)
@@ -1124,41 +1258,48 @@ func (h *Handler) HandleSubmitComment() http.Handler {
 			return
 		}
 
-		if r.Header.Get("X-Alpine-Request") == "true" {
-			comments, err := h.CommentRepo.List(r.Context(), ListCommentsParams{
-				PostID: postID,
-			})
-			if err != nil {
-				slog.ErrorContext(r.Context(), "failed to list comments", "error", err)
-				http.Error(w, "failed to list comments", http.StatusInternalServerError)
-				return
-			}
-
-			data := map[string]any{
-				"Post":         post,
-				"PostComments": comments,
-				"CurrentUser":  user,
-				"csrfField":    csrf.TemplateField(r),
-			}
-
-			var buf bytes.Buffer
-
-			if err := h.Template.ExecuteTemplate(&buf, "comments-list.gohtml", data); err != nil {
-				slog.ErrorContext(r.Context(), "error on execute template", "error", err, "template", "comments-list.gohtml")
-				http.Error(w, "error on execute template", http.StatusInternalServerError)
-				return
-			}
-
-			if err := h.Template.ExecuteTemplate(&buf, "comment-form.gohtml", data); err != nil {
-				slog.ErrorContext(r.Context(), "error on execute template", "error", err, "template", "comment-form.gohtml")
-				http.Error(w, "error on execute template", http.StatusInternalServerError)
-				return
-			}
-
-			w.Header().Set("Content-Type", "text/html")
-			w.Write(buf.Bytes())
-			return
+		err = h.addNotificationToSession(w, r, Notification{
+			Message: "Comment has been created successfully.",
+			Type:    NotificationTypeSuccess,
+		})
+		if err != nil {
+			slog.ErrorContext(r.Context(), "error adding notification to session", "error", err)
 		}
+
+		// if r.Header.Get("X-Alpine-Request") == "true" {
+		// 	comments, err := h.CommentRepo.List(r.Context(), ListCommentsParams{
+		// 		PostID: postID,
+		// 	})
+		// 	if err != nil {
+		// 		slog.ErrorContext(r.Context(), "failed to list comments", "error", err)
+		// 		http.Error(w, "failed to list comments", http.StatusInternalServerError)
+		// 		return
+		// 	}
+
+		// 	data := map[string]any{
+		// 		"Post":         post,
+		// 		"PostComments": comments,
+		// 		"csrfField":    csrf.TemplateField(r),
+		// 	}
+
+		// 	var buf bytes.Buffer
+
+		// 	if err := h.Template.ExecuteTemplate(&buf, "comments-list.gohtml", data); err != nil {
+		// 		slog.ErrorContext(r.Context(), "error on execute template", "error", err, "template", "comments-list.gohtml")
+		// 		http.Error(w, "error on execute template", http.StatusInternalServerError)
+		// 		return
+		// 	}
+
+		// 	if err := h.Template.ExecuteTemplate(&buf, "comment-form.gohtml", data); err != nil {
+		// 		slog.ErrorContext(r.Context(), "error on execute template", "error", err, "template", "comment-form.gohtml")
+		// 		http.Error(w, "error on execute template", http.StatusInternalServerError)
+		// 		return
+		// 	}
+
+		// 	w.Header().Set("Content-Type", "text/html")
+		// 	w.Write(buf.Bytes())
+		// 	return
+		// }
 
 		http.Redirect(w, r, "/posts/"+post.Slug, http.StatusSeeOther)
 	})
@@ -1195,17 +1336,11 @@ func (h *Handler) HandleEditCommentPage() http.Handler {
 
 		data := map[string]any{
 			csrf.TemplateTag: csrf.TemplateField(r),
-			"CurrentUser":    userFromContext(r.Context()),
-			"CurrentPath":    r.URL.Path,
 			"Comment":        comment,
 			"Post":           post,
 		}
 
-		err = h.Template.ExecuteTemplate(w, "edit-comment-page.gohtml", data)
-		if err != nil {
-			slog.ErrorContext(r.Context(), "failed to execute template", "error", err)
-			http.Error(w, "failed to execute template", http.StatusInternalServerError)
-		}
+		h.renderTemplate(w, r, "edit-comment-page.gohtml", data)
 	})
 
 	return h.AuthenticatedOnly(hf)
@@ -1254,6 +1389,14 @@ func (h *Handler) HandleEditComment() http.Handler {
 			return
 		}
 
+		err = h.addNotificationToSession(w, r, Notification{
+			Message: "Comment has been updated successfully.",
+			Type:    NotificationTypeSuccess,
+		})
+		if err != nil {
+			slog.ErrorContext(r.Context(), "error adding notification to session", "error", err)
+		}
+
 		post, err := h.PostRepo.GetByID(r.Context(), comment.PostID)
 		if err != nil {
 			slog.ErrorContext(r.Context(), "error on get post by id", "error", err, "postId", comment.PostID)
@@ -1297,17 +1440,11 @@ func (h *Handler) HandleDeleteCommentPage() http.Handler {
 
 		data := map[string]any{
 			csrf.TemplateTag: csrf.TemplateField(r),
-			"CurrentUser":    userFromContext(r.Context()),
-			"CurrentPath":    r.URL.Path,
 			"Comment":        comment,
 			"Post":           post,
 		}
 
-		err = h.Template.ExecuteTemplate(w, "delete-comment-page.gohtml", data)
-		if err != nil {
-			slog.ErrorContext(r.Context(), "failed to execute template", "error", err)
-			http.Error(w, "failed to execute template", http.StatusInternalServerError)
-		}
+		h.renderTemplate(w, r, "delete-comment-page.gohtml", data)
 	})
 
 	return h.AuthenticatedOnly(hf)
@@ -1339,6 +1476,14 @@ func (h *Handler) HandleDeleteComment() http.Handler {
 			http.Error(w, "error on delete comment", http.StatusInternalServerError)
 
 			return
+		}
+
+		err = h.addNotificationToSession(w, r, Notification{
+			Message: "Comment has been deleted successfully.",
+			Type:    NotificationTypeSuccess,
+		})
+		if err != nil {
+			slog.ErrorContext(r.Context(), "error adding notification to session", "error", err)
 		}
 
 		post, err := h.PostRepo.GetByID(r.Context(), comment.PostID)
