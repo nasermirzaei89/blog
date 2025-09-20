@@ -3,7 +3,7 @@
 {{ template "header.gohtml" . }}
 
 <main>
-    <div class="flex flex-col gap-1">
+    <div id="delete-post-{{ .Post.ID }}" class="flex flex-col gap-1">
         <h1 class="text-3xl">
             Delete Post
         </h1>
@@ -14,7 +14,8 @@
             </div>
             <div class="flex flex-row gap-2">
                 <button type="submit" class="as-button">Yes, Delete It</button>
-                <a href="/posts/{{ .Post.Slug }}" class="as-button variant-plain">Cancel</a>
+                <a href="/posts/{{ .Post.Slug }}" class="as-button variant-plain"
+                    @click.prevent="$el.closest('dialog').close()">Cancel</a>
             </div>
         </form>
     </div>

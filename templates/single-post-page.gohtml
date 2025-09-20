@@ -15,7 +15,9 @@
         {{ if and $currentUser (eq $currentUser.ID .Post.AuthorID) }}
         <div class="flex flex-row gap-2">
             <a href="/posts/{{ .Post.Slug }}/edit" class="as-link">Edit</a>
-            <a href="/posts/{{ .Post.Slug }}/delete" class="as-link">Delete</a>
+            <a href="/posts/{{ .Post.Slug }}/delete" class="as-link" x-init
+                @ajax:before="$dispatch('delete-post-dialog:open')"
+                x-target="delete-post-dialog:delete-post-{{ .Post.ID }}">Delete</a>
         </div>
         {{ end }}
     </div>
@@ -24,6 +26,9 @@
         {{ template "comments-list.gohtml" . }}
         {{ template "comment-form.gohtml" . }}
     </div>
+    <dialog x-init @delete-post-dialog:open.window="$el.showModal()" class="as-dialog">
+        <div id="delete-post-dialog"></div>
+    </dialog>
 </main>
 
 {{ template "footer.gohtml" }}
