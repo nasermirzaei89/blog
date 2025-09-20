@@ -64,7 +64,8 @@ type Notification struct {
 
 func init() {
 	// Register type for gob encoding
-	gob.Register([]Notification{})
+	gob.Register(Notification{})
+	gob.Register(map[string]any{})
 }
 
 var _ http.Handler = (*Handler)(nil)
@@ -174,6 +175,37 @@ func (h *Handler) deleteSessionValue(w http.ResponseWriter, r *http.Request, key
 	return nil
 }
 
+func (h *Handler) getSessionFlash(w http.ResponseWriter, r *http.Request, key string) ([]any, error) {
+	session, err := h.CookieStore.Get(r, h.SessionName)
+	if err != nil {
+		return nil, fmt.Errorf("error getting session: %w", err)
+	}
+
+	res := session.Flashes(key)
+
+	err = session.Save(r, w)
+	if err != nil {
+		return nil, fmt.Errorf("error saving session: %w", err)
+	}
+
+	return res, nil
+}
+
+func (h *Handler) addSessionFlash(w http.ResponseWriter, r *http.Request, key string, value any) error {
+	session, err := h.CookieStore.Get(r, h.SessionName)
+	if err != nil {
+		return fmt.Errorf("error getting session: %w", err)
+	}
+
+	session.AddFlash(value, key)
+	err = session.Save(r, w)
+	if err != nil {
+		return fmt.Errorf("error saving session: %w", err)
+	}
+
+	return nil
+}
+
 func (h *Handler) RecoverMW(next http.Handler) http.Handler {
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		defer func() {
@@ -234,43 +266,85 @@ func userFromContext(ctx context.Context) *User {
 	return user
 }
 
-func (h *Handler) notificationsFromSession(r *http.Request) []Notification {
-	notifications, err := h.getSessionValue(r, "notifications")
+func (h *Handler) notificationsFromSession(w http.ResponseWriter, r *http.Request) []Notification {
+	values, err := h.getSessionFlash(w, r, "notifications")
 	if err != nil {
 		return nil
 	}
 
-	if notifications == nil {
-		return nil
-	}
-
-	notificationSlice, ok := notifications.([]Notification)
-	if !ok {
-		return nil
-	}
-
-	return notificationSlice
-}
-
-func (h *Handler) addNotificationToSession(w http.ResponseWriter, r *http.Request, n Notification) error {
-	notifications, err := h.getSessionValue(r, "notifications")
-	if err != nil {
-		notifications = []Notification{}
-	}
-
-	var notificationSlice []Notification
-	if notifications != nil {
-		if slice, ok := notifications.([]Notification); ok {
-			notificationSlice = slice
+	notifications := make([]Notification, 0, len(values))
+	for _, v := range values {
+		if n, ok := v.(Notification); ok {
+			notifications = append(notifications, n)
 		}
 	}
 
-	notificationSlice = append(notificationSlice, n)
-	return h.setSessionValue(w, r, "notifications", notificationSlice)
+	return notifications
 }
 
-func (h *Handler) clearNotificationsFromSession(w http.ResponseWriter, r *http.Request) error {
-	return h.deleteSessionValue(w, r, "notifications")
+func (h *Handler) addNotificationToSession(w http.ResponseWriter, r *http.Request, n Notification) {
+	err := h.addSessionFlash(w, r, "notifications", n)
+	if err != nil {
+		slog.ErrorContext(r.Context(), "error adding notification to session", "error", err)
+	}
+}
+
+func (h *Handler) addErrorMessage(w http.ResponseWriter, r *http.Request, message string) {
+	h.addNotificationToSession(w, r, Notification{
+		Message: message,
+		Type:    NotificationTypeError,
+	})
+}
+
+func (h *Handler) addSuccessMessage(w http.ResponseWriter, r *http.Request, message string) {
+	h.addNotificationToSession(w, r, Notification{
+		Message: message,
+		Type:    NotificationTypeSuccess,
+	})
+}
+
+func (h *Handler) addInfoMessage(w http.ResponseWriter, r *http.Request, message string) {
+	h.addNotificationToSession(w, r, Notification{
+		Message: message,
+		Type:    NotificationTypeInfo,
+	})
+}
+
+func (h *Handler) addWarningMessage(w http.ResponseWriter, r *http.Request, message string) {
+	h.addNotificationToSession(w, r, Notification{
+		Message: message,
+		Type:    NotificationTypeWarning,
+	})
+}
+
+func (h *Handler) formErrorsFromSession(w http.ResponseWriter, r *http.Request) map[string]any {
+	slog.DebugContext(r.Context(), "retrieving form errors from session")
+	values, err := h.getSessionFlash(w, r, "formErrors")
+	if err != nil {
+		slog.ErrorContext(r.Context(), "error getting form errors from session", "error", err)
+		return nil
+	}
+
+	slog.DebugContext(r.Context(), "form errors from session", "values", values)
+
+	errors := make(map[string]any)
+	for _, iv := range values {
+		if v, ok := iv.(map[string]any); ok {
+			maps.Copy(errors, v)
+		}
+	}
+
+	return errors
+}
+
+func (h *Handler) addFormErrorsToSession(w http.ResponseWriter, r *http.Request, formID string, val any) error {
+	slog.DebugContext(r.Context(), "adding form errors to session", "formID", formID, "val", val)
+	err := h.addSessionFlash(w, r, "formErrors", map[string]any{formID: val})
+	if err != nil {
+		return fmt.Errorf("error adding form error to session: %w", err)
+	}
+
+	return nil
 }
 
 func (h *Handler) AuthenticatedOnly(next http.Handler) http.Handler {
@@ -299,15 +373,13 @@ func (h *Handler) renderTemplate(w http.ResponseWriter, r *http.Request, name st
 	data := map[string]any{
 		"CurrentUser":   userFromContext(r.Context()),
 		"CurrentPath":   r.URL.Path,
-		"Notifications": h.notificationsFromSession(r),
+		"Notifications": h.notificationsFromSession(w, r),
+		"FormErrors":    h.formErrorsFromSession(w, r),
 		"Lang":          "en",
 		"Dir":           "ltr",
 	}
 
 	maps.Copy(data, extraData)
-
-	// Clear notifications after rendering (flash message behavior)
-	h.clearNotificationsFromSession(w, r)
 
 	err := h.Template.ExecuteTemplate(w, name, data)
 	if err != nil {
@@ -420,13 +492,7 @@ func (h *Handler) HandleLogin() http.Handler {
 		user, err := h.UserRepo.GetByUsername(r.Context(), username)
 		if err != nil {
 			if errors.As(err, &UserByUsernameNotFoundError{}) {
-				err = h.addNotificationToSession(w, r, Notification{
-					Message: "Invalid username or password.",
-					Type:    NotificationTypeError,
-				})
-				if err != nil {
-					slog.ErrorContext(r.Context(), "error adding notification to session", "error", err)
-				}
+				h.addErrorMessage(w, r, "Invalid username or password.")
 				w.WriteHeader(http.StatusUnauthorized)
 				h.HandleLoginPage().ServeHTTP(w, r)
 
@@ -441,13 +507,7 @@ func (h *Handler) HandleLogin() http.Handler {
 
 		err = bcrypt.CompareHashAndPassword([]byte(user.PasswordHash), []byte(password))
 		if err != nil {
-			err = h.addNotificationToSession(w, r, Notification{
-				Message: "Invalid username or password.",
-				Type:    NotificationTypeError,
-			})
-			if err != nil {
-				slog.ErrorContext(r.Context(), "error adding notification to session", "error", err)
-			}
+			h.addErrorMessage(w, r, "Invalid username or password.")
 			w.WriteHeader(http.StatusUnauthorized)
 			h.HandleLoginPage().ServeHTTP(w, r)
 
@@ -461,13 +521,7 @@ func (h *Handler) HandleLogin() http.Handler {
 			return
 		}
 
-		err = h.addNotificationToSession(w, r, Notification{
-			Message: "Logged in successfully.",
-			Type:    NotificationTypeSuccess,
-		})
-		if err != nil {
-			slog.ErrorContext(r.Context(), "error adding notification to session", "error", err)
-		}
+		h.addSuccessMessage(w, r, "Logged in successfully.")
 
 		http.Redirect(w, r, "/", http.StatusSeeOther)
 	})
@@ -574,14 +628,7 @@ func (h *Handler) HandleRegister() http.Handler {
 			return
 		}
 
-		err = h.addNotificationToSession(w, r, Notification{
-			Message: "User has been registered successfully.",
-			Type:    NotificationTypeSuccess,
-		})
-		if err != nil {
-			slog.ErrorContext(r.Context(), "error adding notification to session", "error", err)
-		}
-
+		h.addSuccessMessage(w, r, "User has been registered successfully.")
 		http.Redirect(w, r, "/", http.StatusSeeOther)
 	})
 
@@ -609,14 +656,7 @@ func (h *Handler) HandleLogout() http.Handler {
 			return
 		}
 
-		err = h.addNotificationToSession(w, r, Notification{
-			Message: "Logged out successfully.",
-			Type:    NotificationTypeSuccess,
-		})
-		if err != nil {
-			slog.ErrorContext(r.Context(), "error adding notification to session", "error", err)
-		}
-
+		h.addSuccessMessage(w, r, "Logged out successfully.")
 		http.Redirect(w, r, "/", http.StatusSeeOther)
 	})
 
@@ -687,14 +727,7 @@ func (h *Handler) HandleForgotPassword() http.Handler {
 			// Do not reveal error to user
 		}
 
-		err = h.addNotificationToSession(w, r, Notification{
-			Message: "Reset password link has been sent successfully.",
-			Type:    NotificationTypeSuccess,
-		})
-		if err != nil {
-			slog.ErrorContext(r.Context(), "error adding notification to session", "error", err)
-		}
-
+		h.addSuccessMessage(w, r, "Reset password link has been sent successfully.")
 		http.Redirect(w, r, "/", http.StatusSeeOther)
 	})
 
@@ -795,14 +828,7 @@ func (h *Handler) HandleResetPassword() http.Handler {
 			slog.ErrorContext(r.Context(), "error deleting used reset token", "error", err)
 		}
 
-		err = h.addNotificationToSession(w, r, Notification{
-			Message: "Password has been reset successfully.",
-			Type:    NotificationTypeSuccess,
-		})
-		if err != nil {
-			slog.ErrorContext(r.Context(), "error adding notification to session", "error", err)
-		}
-
+		h.addSuccessMessage(w, r, "Password has been reset successfully.")
 		http.Redirect(w, r, "/", http.StatusSeeOther)
 	})
 
@@ -847,14 +873,7 @@ func (h *Handler) HandleProfileUpdate() http.Handler {
 			return
 		}
 
-		err = h.addNotificationToSession(w, r, Notification{
-			Message: "Profile has been updated successfully.",
-			Type:    NotificationTypeSuccess,
-		})
-		if err != nil {
-			slog.ErrorContext(r.Context(), "error adding notification to session", "error", err)
-		}
-
+		h.addSuccessMessage(w, r, "Profile has been updated successfully.")
 		http.Redirect(w, r, "/profile", http.StatusSeeOther)
 	})
 
@@ -866,7 +885,8 @@ func (h *Handler) HandleProfilePasswordUpdate() http.Handler {
 		err := r.ParseForm()
 		if err != nil {
 			slog.ErrorContext(r.Context(), "error on parse form", "error", err)
-			http.Error(w, "error on parse form", http.StatusInternalServerError)
+			h.addErrorMessage(w, r, "Error on parse form.")
+			http.Redirect(w, r, "/profile", http.StatusSeeOther)
 			return
 		}
 
@@ -876,9 +896,10 @@ func (h *Handler) HandleProfilePasswordUpdate() http.Handler {
 		newPassword := r.FormValue("newPassword")
 		newPasswordConfirmation := r.FormValue("newPasswordConfirmation")
 
+		formErrors := map[string]any{}
+
 		if newPassword != newPasswordConfirmation {
-			http.Error(w, "new password and confirmation do not match", http.StatusBadRequest)
-			return
+			formErrors["NewPasswordConfirmation"] = "New password and confirmation do not match"
 		}
 
 		if currentPassword == "" || newPassword == "" {
@@ -887,14 +908,26 @@ func (h *Handler) HandleProfilePasswordUpdate() http.Handler {
 		}
 
 		if err := bcrypt.CompareHashAndPassword([]byte(user.PasswordHash), []byte(currentPassword)); err != nil {
-			http.Error(w, "current password is incorrect", http.StatusUnauthorized)
+			formErrors["CurrentPassword"] = "Current password is incorrect"
+		}
+
+		if len(formErrors) > 0 {
+			h.addErrorMessage(w, r, "Invalid form submission.")
+			// TODO: add form values to session
+			err := h.addFormErrorsToSession(w, r, "ProfilePasswordForm", formErrors)
+			if err != nil {
+				slog.ErrorContext(r.Context(), "error adding form errors to session", "error", err)
+				h.addErrorMessage(w, r, "Error adding form errors.")
+			}
+			http.Redirect(w, r, "/profile", http.StatusSeeOther)
 			return
 		}
 
 		newPasswordHash, err := bcrypt.GenerateFromPassword([]byte(newPassword), bcrypt.DefaultCost)
 		if err != nil {
 			slog.ErrorContext(r.Context(), "error on hash new password", "error", err)
-			http.Error(w, "error on hash new password", http.StatusInternalServerError)
+			h.addErrorMessage(w, r, "Error on hash new password.")
+			http.Redirect(w, r, "/profile", http.StatusSeeOther)
 			return
 		}
 
@@ -903,18 +936,12 @@ func (h *Handler) HandleProfilePasswordUpdate() http.Handler {
 		err = h.UserRepo.Update(r.Context(), user)
 		if err != nil {
 			slog.ErrorContext(r.Context(), "error on update user", "error", err)
-			http.Error(w, "error on update user", http.StatusInternalServerError)
+			h.addErrorMessage(w, r, "Error on update user.")
+			http.Redirect(w, r, "/profile", http.StatusSeeOther)
 			return
 		}
 
-		err = h.addNotificationToSession(w, r, Notification{
-			Message: "Password has been updated successfully.",
-			Type:    NotificationTypeSuccess,
-		})
-		if err != nil {
-			slog.ErrorContext(r.Context(), "error adding notification to session", "error", err)
-		}
-
+		h.addSuccessMessage(w, r, "Password has been updated successfully.")
 		http.Redirect(w, r, "/profile", http.StatusSeeOther)
 	})
 
@@ -1018,14 +1045,7 @@ func (h *Handler) HandleCreatePost() http.Handler {
 			return
 		}
 
-		err = h.addNotificationToSession(w, r, Notification{
-			Message: "Post has been created successfully.",
-			Type:    NotificationTypeSuccess,
-		})
-		if err != nil {
-			slog.ErrorContext(r.Context(), "error adding notification to session", "error", err)
-		}
-
+		h.addSuccessMessage(w, r, "Post has been created successfully.")
 		http.Redirect(w, r, "/posts/"+post.Slug, http.StatusSeeOther)
 	})
 
@@ -1129,14 +1149,7 @@ func (h *Handler) HandleEditPost() http.Handler {
 			return
 		}
 
-		err = h.addNotificationToSession(w, r, Notification{
-			Message: "Post has been updated successfully.",
-			Type:    NotificationTypeSuccess,
-		})
-		if err != nil {
-			slog.ErrorContext(r.Context(), "error adding notification to session", "error", err)
-		}
-
+		h.addSuccessMessage(w, r, "Post has been updated successfully.")
 		http.Redirect(w, r, "/posts/"+post.Slug, http.StatusSeeOther)
 	})
 
@@ -1198,14 +1211,7 @@ func (h *Handler) HandleDeletePost() http.Handler {
 			return
 		}
 
-		err = h.addNotificationToSession(w, r, Notification{
-			Message: "Post has been deleted successfully.",
-			Type:    NotificationTypeSuccess,
-		})
-		if err != nil {
-			slog.ErrorContext(r.Context(), "error adding notification to session", "error", err)
-		}
-
+		h.addSuccessMessage(w, r, "Post has been deleted successfully.")
 		http.Redirect(w, r, "/", http.StatusSeeOther)
 	})
 
@@ -1256,49 +1262,7 @@ func (h *Handler) HandleSubmitComment() http.Handler {
 			return
 		}
 
-		err = h.addNotificationToSession(w, r, Notification{
-			Message: "Comment has been created successfully.",
-			Type:    NotificationTypeSuccess,
-		})
-		if err != nil {
-			slog.ErrorContext(r.Context(), "error adding notification to session", "error", err)
-		}
-
-		// if r.Header.Get("X-Alpine-Request") == "true" {
-		// 	comments, err := h.CommentRepo.List(r.Context(), ListCommentsParams{
-		// 		PostID: postID,
-		// 	})
-		// 	if err != nil {
-		// 		slog.ErrorContext(r.Context(), "failed to list comments", "error", err)
-		// 		http.Error(w, "failed to list comments", http.StatusInternalServerError)
-		// 		return
-		// 	}
-
-		// 	data := map[string]any{
-		// 		"Post":         post,
-		// 		"PostComments": comments,
-		// 		"csrfField":    csrf.TemplateField(r),
-		// 	}
-
-		// 	var buf bytes.Buffer
-
-		// 	if err := h.Template.ExecuteTemplate(&buf, "comments-list.gohtml", data); err != nil {
-		// 		slog.ErrorContext(r.Context(), "error on execute template", "error", err, "template", "comments-list.gohtml")
-		// 		http.Error(w, "error on execute template", http.StatusInternalServerError)
-		// 		return
-		// 	}
-
-		// 	if err := h.Template.ExecuteTemplate(&buf, "comment-form.gohtml", data); err != nil {
-		// 		slog.ErrorContext(r.Context(), "error on execute template", "error", err, "template", "comment-form.gohtml")
-		// 		http.Error(w, "error on execute template", http.StatusInternalServerError)
-		// 		return
-		// 	}
-
-		// 	w.Header().Set("Content-Type", "text/html")
-		// 	w.Write(buf.Bytes())
-		// 	return
-		// }
-
+		h.addSuccessMessage(w, r, "Comment has been created successfully.")
 		http.Redirect(w, r, "/posts/"+post.Slug, http.StatusSeeOther)
 	})
 
@@ -1387,13 +1351,7 @@ func (h *Handler) HandleEditComment() http.Handler {
 			return
 		}
 
-		err = h.addNotificationToSession(w, r, Notification{
-			Message: "Comment has been updated successfully.",
-			Type:    NotificationTypeSuccess,
-		})
-		if err != nil {
-			slog.ErrorContext(r.Context(), "error adding notification to session", "error", err)
-		}
+		h.addSuccessMessage(w, r, "Comment has been updated successfully.")
 
 		post, err := h.PostRepo.GetByID(r.Context(), comment.PostID)
 		if err != nil {
@@ -1476,13 +1434,7 @@ func (h *Handler) HandleDeleteComment() http.Handler {
 			return
 		}
 
-		err = h.addNotificationToSession(w, r, Notification{
-			Message: "Comment has been deleted successfully.",
-			Type:    NotificationTypeSuccess,
-		})
-		if err != nil {
-			slog.ErrorContext(r.Context(), "error adding notification to session", "error", err)
-		}
+		h.addSuccessMessage(w, r, "Comment has been deleted successfully.")
 
 		post, err := h.PostRepo.GetByID(r.Context(), comment.PostID)
 		if err != nil {

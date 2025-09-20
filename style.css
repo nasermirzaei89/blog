@@ -72,8 +72,25 @@ footer {
     }
 
     .as-hint {
-        @apply text-xs text-gray-950;
+        @apply px-2 text-xs text-gray-950;
         @apply dark:text-gray-50;
+    }
+
+    &.has-error {
+        .as-text-input, .as-select-input, textarea {
+            @apply border-red-600 outline-red-300;
+            @apply dark:border-red-400 dark:outline-red-700;
+        }
+
+        label {
+            @apply text-red-600;
+            @apply dark:text-red-400;
+        }
+
+        .as-hint {
+            @apply text-red-600;
+            @apply dark:text-red-400;
+        }
     }
 }
 

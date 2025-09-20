@@ -11,8 +11,9 @@ import (
 )
 
 func main() {
-	slog.SetLogLoggerLevel(getLogLevelFromEnv())
-	slog.SetDefault(slog.New(slogcolor.NewHandler(os.Stderr, slogcolor.DefaultOptions)))
+	opts := slogcolor.DefaultOptions
+	opts.Level = getLogLevelFromEnv()
+	slog.SetDefault(slog.New(slogcolor.NewHandler(os.Stderr, opts)))
 
 	slog.Info("starting app...")
 
