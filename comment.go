@@ -3,6 +3,7 @@ package blog
 import (
 	"context"
 	"database/sql"
+	"errors"
 	"fmt"
 	"log/slog"
 	"time"
@@ -171,7 +172,7 @@ func (repo *CommentRepo) Update(ctx context.Context, comment *Comment) error {
 	}
 
 	if rowsAffected == 0 {
-		return fmt.Errorf("no rows affected")
+		return errors.New("no rows affected")
 	}
 
 	return nil

@@ -3,6 +3,7 @@ package blog
 import (
 	"context"
 	"database/sql"
+	"errors"
 	"fmt"
 	"log/slog"
 	"time"
@@ -178,7 +179,7 @@ func (repo *PostRepo) Create(ctx context.Context, post *Post) error {
 	}
 
 	if rowsAffected == 0 {
-		return fmt.Errorf("no rows affected")
+		return errors.New("no rows affected")
 	}
 
 	return nil
@@ -207,7 +208,7 @@ func (repo *PostRepo) Update(ctx context.Context, post *Post) error {
 	}
 
 	if rowsAffected == 0 {
-		return fmt.Errorf("no rows affected")
+		return errors.New("no rows affected")
 	}
 
 	return nil
@@ -229,7 +230,7 @@ func (repo *PostRepo) Delete(ctx context.Context, id string) error {
 	}
 
 	if rowsAffected == 0 {
-		return fmt.Errorf("no rows affected")
+		return errors.New("no rows affected")
 	}
 
 	return nil

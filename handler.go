@@ -128,7 +128,7 @@ type SessionValueNotFoundError struct {
 }
 
 func (err SessionValueNotFoundError) Error() string {
-	return fmt.Sprintf("session value not found for key: %s", err.Key)
+	return fmt.Sprintf("session value for key '%s' not found", err.Key)
 }
 
 func (h *Handler) getSessionValue(r *http.Request, key string) (any, error) {
@@ -1731,7 +1731,7 @@ func (h *Handler) generateUniqueSlug(ctx context.Context, baseSlug string) (stri
 	}
 
 	for {
-		candidateSlug := basePart + "-" + fmt.Sprintf("%d", counter)
+		candidateSlug := basePart + "-" + strconv.Itoa(counter)
 
 		exists, err := h.PostRepo.SlugExists(ctx, candidateSlug)
 		if err != nil {
@@ -1745,7 +1745,7 @@ func (h *Handler) generateUniqueSlug(ctx context.Context, baseSlug string) (stri
 		counter++
 
 		if counter > 1000 {
-			return "", fmt.Errorf("unable to generate unique slug after 1000 attempts")
+			return "", errors.New("unable to generate unique slug after 1000 attempts")
 		}
 	}
 }

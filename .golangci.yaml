@@ -28,7 +28,6 @@ linters:
     - nestif
     - noinlineerr
     - paralleltest
-    - perfsprint
     - revive
     - staticcheck
     - unused
