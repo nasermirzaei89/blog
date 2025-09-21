@@ -364,16 +364,12 @@ func (h *Handler) addWarningMessage(w http.ResponseWriter, r *http.Request, mess
 }
 
 func (h *Handler) formErrorsFromSession(w http.ResponseWriter, r *http.Request) map[string]any {
-	slog.DebugContext(r.Context(), "retrieving form errors from session")
-
 	values, err := h.getSessionFlash(w, r, "formErrors")
 	if err != nil {
 		slog.ErrorContext(r.Context(), "error getting form errors from session", "error", err)
 
 		return nil
 	}
-
-	slog.DebugContext(r.Context(), "form errors from session", "values", values)
 
 	errors := make(map[string]any)
 	for _, iv := range values {
@@ -391,8 +387,6 @@ func (h *Handler) addFormErrorsToSession(
 	formID string,
 	val any,
 ) error {
-	slog.DebugContext(r.Context(), "adding form errors to session", "formID", formID, "val", val)
-
 	err := h.addSessionFlash(w, r, "formErrors", map[string]any{formID: val})
 	if err != nil {
 		return fmt.Errorf("error adding form error to session: %w", err)
