@@ -1,11 +1,19 @@
 #@IgnoreInspection BashAddShebang
 ROOT=$(realpath $(dir $(lastword $(MAKEFILE_LIST))))
 CGO_ENABLED?=0
+GO_CMD?=go
+
 
 APP_NAME?=blog
 
 IMAGE_REPOSITORY?=ghcr.io/nasermirzaei89/blog
 IMAGE_TAG?=latest
+
+# Install by `go get -tool github.com/golangci/golangci-lint/v2/cmd/golangci-lint@<SET VERSION>`
+GOLANGCI_LINT_CMD=$(GO_CMD) tool golangci-lint
+
+NPM_CMD?=npm
+DOCKER_CMD?=docker
 
 .DEFAULT_GOAL := .default
 
@@ -18,7 +26,7 @@ help: ## Show help
 ### Go
 
 .which-go:
-	@which go > /dev/null || (echo "Install Go from https://go.dev/doc/install" & exit 1)
+	@which $(GO_CMD) > /dev/null || (echo "Install Go from https://go.dev/doc/install" & exit 1)
 
 .PHONY: run
 run: build ## Run application
@@ -26,40 +34,40 @@ run: build ## Run application
 
 .PHONY: build
 build: npm-build .which-go ## Build binary
-	CGO_ENABLED=1 go build -v -o $(ROOT)/bin/$(APP_NAME) $(ROOT)/cmd/$(APP_NAME)
+	CGO_ENABLED=1 $(GO_CMD) build -v -o $(ROOT)/bin/$(APP_NAME) $(ROOT)/cmd/$(APP_NAME)
 
 .PHONY: format
 format: .which-go ## Format files
-	go mod tidy
-	golangci-lint fmt $(ROOT)/...
+	$(GO_CMD) mod tidy
+	$(GOLANGCI_LINT_CMD) fmt $(ROOT)/...
 
 .PHONY: lint
 lint: .which-go ## Lint files
-	golangci-lint run $(ROOT)/...
+	$(GOLANGCI_LINT_CMD) run $(ROOT)/...
 
 .PHONY: test
 test: .which-go ## Run tests
-	CGO_ENABLED=1 go test -cover $(ROOT)/...
+	CGO_ENABLED=1 $(GO_CMD) test -race -cover -coverprofile=coverage.out -covermode=atomic $(ROOT)/...
 
 ### Node
 
 .which-npm:
-	@which npm > /dev/null || (echo "Install NodeJS from https://nodejs.org/en/download" & exit 1)
+	@which $(NPM_CMD) > /dev/null || (echo "Install NodeJS from https://nodejs.org/en/download" & exit 1)
 
 .PHONY: npm-build
 npm-build: .which-npm ## Build JS and CSS
-	npm run build:js
-	npm run build:css
+	$(NPM_CMD) run build:js
+	$(NPM_CMD) run build:css
 
 ### Docker
 
 .which-docker:
-	@which docker > /dev/null || (echo "Install Docker from https://www.docker.com/get-started/" & exit 1)
+	@which $(DOCKER_CMD) > /dev/null || (echo "Install Docker from https://www.docker.com/get-started/" & exit 1)
 
 .PHONY: docker-build
 docker-build: .which-docker ## Build docker image
-	docker build -t $(IMAGE_REPOSITORY):$(IMAGE_TAG) $(ROOT)
+	$(DOCKER_CMD) build -t $(IMAGE_REPOSITORY):$(IMAGE_TAG) $(ROOT)
 
 .PHONY: docker-push
 docker-push: .which-docker ## Push docker image
-	docker push $(IMAGE_REPOSITORY):$(IMAGE_TAG)
+	$(DOCKER_CMD) push $(IMAGE_REPOSITORY):$(IMAGE_TAG)
