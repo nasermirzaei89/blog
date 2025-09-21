@@ -815,7 +815,9 @@ func (h *Handler) HandleForgotPassword() http.Handler {
 			Token:     resetToken,
 			ExpiresAt: resetTokenExpiry,
 		}
-		if err := h.PasswordResetTokenRepo.Create(r.Context(), reset); err != nil {
+
+		err = h.PasswordResetTokenRepo.Create(r.Context(), reset)
+		if err != nil {
 			slog.ErrorContext(r.Context(), "error saving reset token", "error", err)
 			http.Error(w, "error saving reset token", http.StatusInternalServerError)
 
@@ -830,7 +832,8 @@ func (h *Handler) HandleForgotPassword() http.Handler {
 			resetLink,
 		)
 
-		if err := h.Mailer.SendEmail(r.Context(), emailAddress, subject, body); err != nil {
+		err = h.Mailer.SendEmail(r.Context(), emailAddress, subject, body)
+		if err != nil {
 			slog.ErrorContext(r.Context(), "failed to send reset email", "error", err)
 			// Do not reveal error to user
 		}
@@ -938,14 +941,16 @@ func (h *Handler) HandleResetPassword() http.Handler {
 		user.PasswordHash = string(newPasswordHash)
 		user.UpdatedAt = time.Now()
 
-		if err := h.UserRepo.Update(r.Context(), user); err != nil {
+		err = h.UserRepo.Update(r.Context(), user)
+		if err != nil {
 			slog.ErrorContext(r.Context(), "error updating user password", "error", err)
 			http.Error(w, "error updating password", http.StatusInternalServerError)
 
 			return
 		}
 
-		if err := h.PasswordResetTokenRepo.Delete(r.Context(), resetToken.ID); err != nil {
+		err = h.PasswordResetTokenRepo.Delete(r.Context(), resetToken.ID)
+		if err != nil {
 			slog.ErrorContext(r.Context(), "error deleting used reset token", "error", err)
 		}
 
@@ -1036,7 +1041,8 @@ func (h *Handler) HandleProfilePasswordUpdate() http.Handler {
 			return
 		}
 
-		if err := bcrypt.CompareHashAndPassword([]byte(user.PasswordHash), []byte(currentPassword)); err != nil {
+		err = bcrypt.CompareHashAndPassword([]byte(user.PasswordHash), []byte(currentPassword))
+		if err != nil {
 			formErrors["CurrentPassword"] = "Current password is incorrect"
 		}
 
@@ -1726,7 +1732,9 @@ func (h *Handler) generateUniqueSlug(ctx context.Context, baseSlug string) (stri
 	parts := strings.Split(baseSlug, "-")
 	if len(parts) > 1 {
 		lastPart := parts[len(parts)-1]
-		if num, err := strconv.Atoi(lastPart); err == nil {
+
+		num, err := strconv.Atoi(lastPart)
+		if err == nil {
 			basePart = strings.Join(parts[:len(parts)-1], "-")
 			counter = num + 1
 		}

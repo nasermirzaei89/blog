@@ -21,7 +21,6 @@ linters:
     - lll
     - mnd
     - nestif
-    - noinlineerr
     - paralleltest
     - revive
     - staticcheck

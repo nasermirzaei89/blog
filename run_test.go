@@ -59,7 +59,8 @@ func runApp(serverURL string) func(t *testing.T) {
 			t.Fatalf("could not create page: %v", err)
 		}
 
-		if _, err := page.Goto(serverURL); err != nil {
+		_, err = page.Goto(serverURL)
+		if err != nil {
 			t.Fatalf("could not go to page: %v", err)
 		}
 
@@ -78,38 +79,49 @@ func runApp(serverURL string) func(t *testing.T) {
 
 func runRegister(page playwright.Page) func(t *testing.T) {
 	return func(t *testing.T) {
-		if err := page.GetByText("Register").Click(); err != nil {
+		err := page.GetByText("Register").Click()
+		if err != nil {
 			t.Fatalf("could not click Register: %v", err)
 		}
 
 		username := "testuser"
-		if err := page.Locator("input[name=username]").Fill(username); err != nil {
+
+		err = page.Locator("input[name=username]").Fill(username)
+		if err != nil {
 			t.Fatalf("could not fill username: %v", err)
 		}
 
 		emailAddress := "testuser@example.com"
-		if err := page.Locator("input[name=emailAddress]").Fill(emailAddress); err != nil {
+
+		err = page.Locator("input[name=emailAddress]").Fill(emailAddress)
+		if err != nil {
 			t.Fatalf("could not fill email address: %v", err)
 		}
 
 		password := "password123"
-		if err := page.Locator("input[name=password]").Fill(password); err != nil {
+
+		err = page.Locator("input[name=password]").Fill(password)
+		if err != nil {
 			t.Fatalf("could not fill password: %v", err)
 		}
 
-		if err := page.Locator("input[name=passwordConfirmation]").Fill(password); err != nil {
+		err = page.Locator("input[name=passwordConfirmation]").Fill(password)
+		if err != nil {
 			t.Fatalf("could not fill password confirmation: %v", err)
 		}
 
-		if err := page.GetByText("Sign Up").Click(); err != nil {
+		err = page.GetByText("Sign Up").Click()
+		if err != nil {
 			t.Fatalf("could not click sign up button: %v", err)
 		}
 
 		logoutLocator := page.GetByText("Logout")
-		if err := logoutLocator.WaitFor(playwright.LocatorWaitForOptions{
+
+		err = logoutLocator.WaitFor(playwright.LocatorWaitForOptions{
 			State:   playwright.WaitForSelectorStateVisible,
 			Timeout: playwright.Float(5000),
-		}); err != nil {
+		})
+		if err != nil {
 			t.Fatalf("registration failed or user not logged in: %v", err)
 		}
 
@@ -121,25 +133,32 @@ func runRegister(page playwright.Page) func(t *testing.T) {
 
 func runUpdateProfile(page playwright.Page) func(t *testing.T) {
 	return func(t *testing.T) {
-		if err := page.GetByRole("link", playwright.PageGetByRoleOptions{Name: "Profile"}).Click(); err != nil {
+		err := page.GetByRole("link", playwright.PageGetByRoleOptions{Name: "Profile"}).Click()
+		if err != nil {
 			t.Fatalf("could not click Profile: %v", err)
 		}
 
 		newName := "Updated User"
-		if err := page.Locator("input[name=name]").Fill(newName); err != nil {
+
+		err = page.Locator("input[name=name]").Fill(newName)
+		if err != nil {
 			t.Fatalf("could not fill name: %v", err)
 		}
 
 		newEmail := "updateduser@example.com"
-		if err := page.Locator("input[name=emailAddress]").Fill(newEmail); err != nil {
+
+		err = page.Locator("input[name=emailAddress]").Fill(newEmail)
+		if err != nil {
 			t.Fatalf("could not fill email address: %v", err)
 		}
 
-		if err := page.Locator("input[name=avatarUrl]").Fill("https://i.pravatar.cc/100?u=" + newEmail); err != nil {
+		err = page.Locator("input[name=avatarUrl]").Fill("https://i.pravatar.cc/100?u=" + newEmail)
+		if err != nil {
 			t.Fatalf("could not fill avatar URL: %v", err)
 		}
 
-		if err := page.GetByText("Update Profile").Click(); err != nil {
+		err = page.GetByText("Update Profile").Click()
+		if err != nil {
 			t.Fatalf("could not click update profile: %v", err)
 		}
 	}
@@ -147,25 +166,32 @@ func runUpdateProfile(page playwright.Page) func(t *testing.T) {
 
 func runChangePassword(page playwright.Page, username string) func(t *testing.T) {
 	return func(t *testing.T) {
-		if err := page.GetByRole("link", playwright.PageGetByRoleOptions{Name: "Profile"}).Click(); err != nil {
+		err := page.GetByRole("link", playwright.PageGetByRoleOptions{Name: "Profile"}).Click()
+		if err != nil {
 			t.Fatalf("could not click profile: %v", err)
 		}
 
 		currentPassword := "password123"
-		if err := page.Locator("input[name=currentPassword]").Fill(currentPassword); err != nil {
+
+		err = page.Locator("input[name=currentPassword]").Fill(currentPassword)
+		if err != nil {
 			t.Fatalf("could not fill current password: %v", err)
 		}
 
 		newPassword := "newpassword456"
-		if err := page.Locator("input[name=newPassword]").Fill(newPassword); err != nil {
+
+		err = page.Locator("input[name=newPassword]").Fill(newPassword)
+		if err != nil {
 			t.Fatalf("could not fill new password: %v", err)
 		}
 
-		if err := page.Locator("input[name=newPasswordConfirmation]").Fill(newPassword); err != nil {
+		err = page.Locator("input[name=newPasswordConfirmation]").Fill(newPassword)
+		if err != nil {
 			t.Fatalf("could not fill new password confirmation: %v", err)
 		}
 
-		if err := page.GetByRole("button", playwright.PageGetByRoleOptions{Name: "Change Password"}).Click(); err != nil {
+		err = page.GetByRole("button", playwright.PageGetByRoleOptions{Name: "Change Password"}).Click()
+		if err != nil {
 			t.Fatalf("could not click change password: %v", err)
 		}
 
@@ -175,19 +201,23 @@ func runChangePassword(page playwright.Page, username string) func(t *testing.T)
 
 func runLogout(page playwright.Page, username, password string) func(t *testing.T) {
 	return func(t *testing.T) {
-		if err := page.GetByText("Logout").Click(); err != nil {
+		err := page.GetByText("Logout").Click()
+		if err != nil {
 			t.Fatalf("could not click logout: %v", err)
 		}
 
-		if err := page.GetByText("Sign Out").Click(); err != nil {
+		err = page.GetByText("Sign Out").Click()
+		if err != nil {
 			t.Fatalf("could not click sign out: %v", err)
 		}
 
 		loginLocator := page.GetByText("Login")
-		if err := loginLocator.WaitFor(playwright.LocatorWaitForOptions{
+
+		err = loginLocator.WaitFor(playwright.LocatorWaitForOptions{
 			State:   playwright.WaitForSelectorStateVisible,
 			Timeout: playwright.Float(5000),
-		}); err != nil {
+		})
+		if err != nil {
 			t.Fatalf("registration failed or user not logged in: %v", err)
 		}
 
@@ -197,19 +227,23 @@ func runLogout(page playwright.Page, username, password string) func(t *testing.
 
 func runLogin(page playwright.Page, username, password string) func(t *testing.T) {
 	return func(t *testing.T) {
-		if err := page.GetByText("Login").Click(); err != nil {
+		err := page.GetByText("Login").Click()
+		if err != nil {
 			t.Fatalf("could not click Login: %v", err)
 		}
 
-		if err := page.Locator("input[name=username]").Fill(username); err != nil {
+		err = page.Locator("input[name=username]").Fill(username)
+		if err != nil {
 			t.Fatalf("could not fill username: %v", err)
 		}
 
-		if err := page.Locator("input[name=password]").Fill(password); err != nil {
+		err = page.Locator("input[name=password]").Fill(password)
+		if err != nil {
 			t.Fatalf("could not fill password: %v", err)
 		}
 
-		if err := page.GetByText("Sign In").Click(); err != nil {
+		err = page.GetByText("Sign In").Click()
+		if err != nil {
 			t.Fatalf("could not click sign in: %v", err)
 		}
 	}
