@@ -24,6 +24,14 @@ type PasswordResetTokenRepository interface {
 	Delete(ctx context.Context, tokenID string) (err error)
 }
 
+type PasswordResetTokenError struct {
+	Token string
+}
+
+func (err PasswordResetTokenError) Error() string {
+	return fmt.Sprintf("password reset token '%s' not found", err.Token)
+}
+
 type PasswordResetTokenRepo struct {
 	DB *sql.DB
 }
@@ -50,7 +58,7 @@ func (repo *PasswordResetTokenRepo) GetByToken(
 	token, err := scanPasswordResetToken(q.QueryRowContext(ctx))
 	if err != nil {
 		if errors.Is(err, sql.ErrNoRows) {
-			return nil, fmt.Errorf("password reset token '%s' not found", tokenStr)
+			return nil, PasswordResetTokenError{Token: tokenStr}
 		}
 
 		return nil, fmt.Errorf("error on scan password reset token: %w", err)

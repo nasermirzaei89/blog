@@ -12,7 +12,6 @@ linters:
     - cyclop
     - depguard
     - dupl
-    - err113
     - exhaustruct
     - forcetypeassert
     - funcorder

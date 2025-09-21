@@ -1708,6 +1708,8 @@ func (h *Handler) generateExcerpt(content string, maxLength int) string {
 	return excerpt + "..."
 }
 
+var ErrUnableToGenerateUniqueSlug = errors.New("unable to generate unique slug after 1000 attempts")
+
 func (h *Handler) generateUniqueSlug(ctx context.Context, baseSlug string) (string, error) {
 	exists, err := h.PostRepo.SlugExists(ctx, baseSlug)
 	if err != nil {
@@ -1745,7 +1747,7 @@ func (h *Handler) generateUniqueSlug(ctx context.Context, baseSlug string) (stri
 		counter++
 
 		if counter > 1000 {
-			return "", errors.New("unable to generate unique slug after 1000 attempts")
+			return "", ErrUnableToGenerateUniqueSlug
 		}
 	}
 }
