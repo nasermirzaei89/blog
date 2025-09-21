@@ -1691,7 +1691,7 @@ func (h *Handler) HandleDeleteComment() http.Handler {
 	return h.AuthenticatedOnly(hf)
 }
 
-// generateExcerpt creates a properly sized excerpt from content
+// generateExcerpt creates a properly sized excerpt from content.
 func (h *Handler) generateExcerpt(content string, maxLength int) string {
 	if len(content) <= maxLength {
 		return content
