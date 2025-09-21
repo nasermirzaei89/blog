@@ -3,7 +3,6 @@ ROOT=$(realpath $(dir $(lastword $(MAKEFILE_LIST))))
 CGO_ENABLED?=0
 GO_CMD?=go
 
-
 APP_NAME?=blog
 
 IMAGE_REPOSITORY?=ghcr.io/nasermirzaei89/blog
@@ -17,7 +16,7 @@ DOCKER_CMD?=docker
 
 .DEFAULT_GOAL := .default
 
-.default: format build test
+.default: format lint build test
 
 .PHONY: help
 help: ## Show help

@@ -51,10 +51,10 @@ func Run(ctx context.Context) error {
 	}
 
 	// Repositories
-	userRepo := &UserRepository{DB: db}
-	postRepo := &PostRepository{DB: db}
-	commentRepo := &CommentRepository{DB: db}
-	passwordResetTokenRepo := &PasswordResetTokenRepository{DB: db}
+	userRepo := &UserRepo{DB: db}
+	postRepo := &PostRepo{DB: db}
+	commentRepo := &CommentRepo{DB: db}
+	passwordResetTokenRepo := &PasswordResetTokenRepo{DB: db}
 
 	//
 	static, err := fs.Sub(embeddedFS, "static")

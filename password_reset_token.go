@@ -18,7 +18,13 @@ type PasswordResetToken struct {
 	ExpiresAt time.Time
 }
 
-type PasswordResetTokenRepository struct {
+type PasswordResetTokenRepository interface {
+	GetByToken(ctx context.Context, tokenStr string) (passwordResetToken *PasswordResetToken, err error)
+	Create(ctx context.Context, token *PasswordResetToken) (err error)
+	Delete(ctx context.Context, tokenID string) (err error)
+}
+
+type PasswordResetTokenRepo struct {
 	DB *sql.DB
 }
 
@@ -33,7 +39,7 @@ func scanPasswordResetToken(rs squirrel.RowScanner) (*PasswordResetToken, error)
 	return &token, nil
 }
 
-func (repo *PasswordResetTokenRepository) GetByToken(
+func (repo *PasswordResetTokenRepo) GetByToken(
 	ctx context.Context,
 	tokenStr string,
 ) (*PasswordResetToken, error) {
@@ -53,7 +59,7 @@ func (repo *PasswordResetTokenRepository) GetByToken(
 	return token, nil
 }
 
-func (repo *PasswordResetTokenRepository) Create(
+func (repo *PasswordResetTokenRepo) Create(
 	ctx context.Context,
 	token *PasswordResetToken,
 ) error {
@@ -70,7 +76,7 @@ func (repo *PasswordResetTokenRepository) Create(
 	return nil
 }
 
-func (repo *PasswordResetTokenRepository) Delete(ctx context.Context, tokenID string) error {
+func (repo *PasswordResetTokenRepo) Delete(ctx context.Context, tokenID string) error {
 	q := squirrel.Delete("password_reset_tokens").Where(squirrel.Eq{"id": tokenID})
 	q = q.RunWith(repo.DB)
 

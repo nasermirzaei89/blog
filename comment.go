@@ -22,11 +22,23 @@ type Comment struct {
 	UpdatedAt     time.Time
 }
 
-type CommentRepository struct {
+type ListCommentsParams struct {
+	PostID string
+}
+
+type CommentRepository interface {
+	Create(ctx context.Context, comment *Comment) (err error)
+	List(ctx context.Context, params ListCommentsParams) (comments []*Comment, err error)
+	GetByID(ctx context.Context, id string) (comment *Comment, err error)
+	Update(ctx context.Context, comment *Comment) (err error)
+	Delete(ctx context.Context, id string) (err error)
+}
+
+type CommentRepo struct {
 	DB *sql.DB
 }
 
-func (repo *CommentRepository) Create(ctx context.Context, comment *Comment) error {
+func (repo *CommentRepo) Create(ctx context.Context, comment *Comment) error {
 	q := squirrel.Insert("comments").
 		Columns("id", "post_id", "user_id", "content", "created_at", "updated_at").
 		Values(comment.ID, comment.PostID, comment.UserID, comment.Content, comment.CreatedAt, comment.UpdatedAt)
@@ -62,11 +74,7 @@ func scanComment(rs squirrel.RowScanner) (*Comment, error) {
 	return &comment, nil
 }
 
-type ListCommentsParams struct {
-	PostID string
-}
-
-func (repo *CommentRepository) List(
+func (repo *CommentRepo) List(
 	ctx context.Context,
 	params ListCommentsParams,
 ) ([]*Comment, error) {
@@ -119,7 +127,7 @@ func (repo *CommentRepository) List(
 	return comments, nil
 }
 
-func (repo *CommentRepository) GetByID(ctx context.Context, id string) (*Comment, error) {
+func (repo *CommentRepo) GetByID(ctx context.Context, id string) (*Comment, error) {
 	q := squirrel.Select(
 		"c.id",
 		"c.post_id",
@@ -142,7 +150,7 @@ func (repo *CommentRepository) GetByID(ctx context.Context, id string) (*Comment
 	return comment, nil
 }
 
-func (repo *CommentRepository) Update(ctx context.Context, comment *Comment) error {
+func (repo *CommentRepo) Update(ctx context.Context, comment *Comment) error {
 	q := squirrel.Update("comments").SetMap(map[string]any{
 		"post_id":    comment.PostID,
 		"user_id":    comment.UserID,
@@ -169,7 +177,7 @@ func (repo *CommentRepository) Update(ctx context.Context, comment *Comment) err
 	return nil
 }
 
-func (repo *CommentRepository) Delete(ctx context.Context, id string) error {
+func (repo *CommentRepo) Delete(ctx context.Context, id string) error {
 	q := squirrel.Delete("comments").Where(squirrel.Eq{"id": id})
 
 	q = q.RunWith(repo.DB)

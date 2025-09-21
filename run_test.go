@@ -252,10 +252,10 @@ func runServer(t *testing.T) *httptest.Server {
 	}
 
 	// Repositories
-	userRepo := &blog.UserRepository{DB: db}
-	postRepo := &blog.PostRepository{DB: db}
-	commentRepo := &blog.CommentRepository{DB: db}
-	passwordResetTokenRepo := &blog.PasswordResetTokenRepository{DB: db}
+	userRepo := &blog.UserRepo{DB: db}
+	postRepo := &blog.PostRepo{DB: db}
+	commentRepo := &blog.CommentRepo{DB: db}
+	passwordResetTokenRepo := &blog.PasswordResetTokenRepo{DB: db}
 
 	mockMailer := &mailer.MockMailer{}
 

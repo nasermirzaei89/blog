@@ -22,7 +22,47 @@ type User struct {
 	UpdatedAt    time.Time
 }
 
-type UserRepository struct {
+type ListUsersParams struct {
+	Username     string
+	EmailAddress string
+}
+
+type UserRepository interface {
+	GetByUsername(ctx context.Context, username string) (user *User, err error)
+	GetByEmailAddress(ctx context.Context, emailAddress string) (user *User, err error)
+	GetByID(ctx context.Context, id string) (user *User, err error)
+	List(ctx context.Context, params ListUsersParams) (users []*User, err error)
+	ExistsByUsername(ctx context.Context, username string) (exists bool, err error)
+	ExistsByEmailAddress(ctx context.Context, emailAddress string) (exists bool, err error)
+	Create(ctx context.Context, user *User) (err error)
+	Update(ctx context.Context, user *User) (err error)
+}
+
+type UserByUsernameNotFoundError struct {
+	Username string
+}
+
+func (err UserByUsernameNotFoundError) Error() string {
+	return fmt.Sprintf("user by username '%s' not found", err.Username)
+}
+
+type UserByEmailNotFoundError struct {
+	EmailAddress string
+}
+
+func (err UserByEmailNotFoundError) Error() string {
+	return fmt.Sprintf("user by email address '%s' not found", err.EmailAddress)
+}
+
+type UserByIDNotFoundError struct {
+	ID string
+}
+
+func (err UserByIDNotFoundError) Error() string {
+	return fmt.Sprintf("user by id '%s' not found", err.ID)
+}
+
+type UserRepo struct {
 	DB *sql.DB
 }
 
@@ -46,15 +86,7 @@ func scanUser(rs squirrel.RowScanner) (*User, error) {
 	return &user, nil
 }
 
-type UserByUsernameNotFoundError struct {
-	Username string
-}
-
-func (err UserByUsernameNotFoundError) Error() string {
-	return fmt.Sprintf("user by username '%s' not found", err.Username)
-}
-
-func (repo *UserRepository) GetByUsername(ctx context.Context, username string) (*User, error) {
+func (repo *UserRepo) GetByUsername(ctx context.Context, username string) (*User, error) {
 	q := squirrel.Select("*").From("users").Where(squirrel.Eq{"username": username})
 
 	q = q.RunWith(repo.DB)
@@ -71,15 +103,7 @@ func (repo *UserRepository) GetByUsername(ctx context.Context, username string) 
 	return user, nil
 }
 
-type UserByEmailNotFoundError struct {
-	EmailAddress string
-}
-
-func (err UserByEmailNotFoundError) Error() string {
-	return fmt.Sprintf("user by email address '%s' not found", err.EmailAddress)
-}
-
-func (repo *UserRepository) GetByEmailAddress(
+func (repo *UserRepo) GetByEmailAddress(
 	ctx context.Context,
 	emailAddress string,
 ) (*User, error) {
@@ -98,15 +122,7 @@ func (repo *UserRepository) GetByEmailAddress(
 	return user, nil
 }
 
-type UserByIDNotFoundError struct {
-	ID string
-}
-
-func (err UserByIDNotFoundError) Error() string {
-	return fmt.Sprintf("user by id '%s' not found", err.ID)
-}
-
-func (repo *UserRepository) GetByID(ctx context.Context, id string) (*User, error) {
+func (repo *UserRepo) GetByID(ctx context.Context, id string) (*User, error) {
 	q := squirrel.Select("*").From("users").Where(squirrel.Eq{"id": id})
 	q = q.RunWith(repo.DB)
 
@@ -122,12 +138,7 @@ func (repo *UserRepository) GetByID(ctx context.Context, id string) (*User, erro
 	return user, nil
 }
 
-type ListUsersParams struct {
-	Username     string
-	EmailAddress string
-}
-
-func (repo *UserRepository) List(ctx context.Context, params ListUsersParams) ([]*User, error) {
+func (repo *UserRepo) List(ctx context.Context, params ListUsersParams) ([]*User, error) {
 	q := squirrel.Select("*").From("users")
 
 	if params.Username != "" {
@@ -171,7 +182,7 @@ func (repo *UserRepository) List(ctx context.Context, params ListUsersParams) ([
 	return users, nil
 }
 
-func (repo *UserRepository) ExistsByUsername(ctx context.Context, username string) (bool, error) {
+func (repo *UserRepo) ExistsByUsername(ctx context.Context, username string) (bool, error) {
 	q := squirrel.Select("1").From("users").Where(squirrel.Eq{"username": username})
 
 	q = q.RunWith(repo.DB)
@@ -190,7 +201,7 @@ func (repo *UserRepository) ExistsByUsername(ctx context.Context, username strin
 	return true, nil
 }
 
-func (repo *UserRepository) ExistsByEmailAddress(
+func (repo *UserRepo) ExistsByEmailAddress(
 	ctx context.Context,
 	emailAddress string,
 ) (bool, error) {
@@ -212,7 +223,7 @@ func (repo *UserRepository) ExistsByEmailAddress(
 	return true, nil
 }
 
-func (repo *UserRepository) Create(ctx context.Context, user *User) error {
+func (repo *UserRepo) Create(ctx context.Context, user *User) error {
 	q := squirrel.Insert("users").
 		Columns("id", "username", "email_address", "password_hash", "name", "avatar_url", "created_at", "updated_at").
 		Values(user.ID, user.Username, user.EmailAddress, user.PasswordHash, user.Name, user.AvatarURL, user.CreatedAt, user.UpdatedAt)
@@ -227,7 +238,7 @@ func (repo *UserRepository) Create(ctx context.Context, user *User) error {
 	return nil
 }
 
-func (repo *UserRepository) Update(ctx context.Context, user *User) error {
+func (repo *UserRepo) Update(ctx context.Context, user *User) error {
 	q := squirrel.Update("users").
 		Set("username", user.Username).
 		Set("email_address", user.EmailAddress).

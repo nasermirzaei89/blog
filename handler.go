@@ -32,10 +32,10 @@ type Handler struct {
 	CookieStore            *sessions.CookieStore
 	SessionName            string
 	Template               *template.Template
-	UserRepo               *UserRepository
-	PostRepo               *PostRepository
-	CommentRepo            *CommentRepository
-	PasswordResetTokenRepo *PasswordResetTokenRepository
+	UserRepo               UserRepository
+	PostRepo               PostRepository
+	CommentRepo            CommentRepository
+	PasswordResetTokenRepo PasswordResetTokenRepository
 	Mailer                 mailer.Mailer
 	HTMLPolicy             *bluemonday.Policy
 	TextPolicy             *bluemonday.Policy
@@ -1735,7 +1735,7 @@ func (h *Handler) generateUniqueSlug(ctx context.Context, baseSlug string) (stri
 
 		exists, err := h.PostRepo.SlugExists(ctx, candidateSlug)
 		if err != nil {
-			return "", err
+			return "", fmt.Errorf("error checking slug existence: %w", err)
 		}
 
 		if !exists {
