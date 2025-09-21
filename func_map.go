@@ -14,7 +14,7 @@ var Funcs = template.FuncMap{
 		return cmp.Or(s1, s2)
 	},
 	"html": func(s string) template.HTML {
-		return template.HTML(s)
+		return template.HTML(s) //nolint:gosec
 	},
 	"sub": func(a, b int) int {
 		return a - b
