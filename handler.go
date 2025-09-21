@@ -145,13 +145,19 @@ func (h *Handler) getSessionValue(r *http.Request, key string) (any, error) {
 	return value, nil
 }
 
-func (h *Handler) setSessionValue(w http.ResponseWriter, r *http.Request, key string, value any) error {
+func (h *Handler) setSessionValue(
+	w http.ResponseWriter,
+	r *http.Request,
+	key string,
+	value any,
+) error {
 	session, err := h.CookieStore.Get(r, h.SessionName)
 	if err != nil {
 		return fmt.Errorf("error getting session: %w", err)
 	}
 
 	session.Values[key] = value
+
 	err = session.Save(r, w)
 	if err != nil {
 		return fmt.Errorf("error saving session: %w", err)
@@ -167,6 +173,7 @@ func (h *Handler) deleteSessionValue(w http.ResponseWriter, r *http.Request, key
 	}
 
 	delete(session.Values, key)
+
 	err = session.Save(r, w)
 	if err != nil {
 		return fmt.Errorf("error saving session: %w", err)
@@ -175,7 +182,11 @@ func (h *Handler) deleteSessionValue(w http.ResponseWriter, r *http.Request, key
 	return nil
 }
 
-func (h *Handler) getSessionFlash(w http.ResponseWriter, r *http.Request, key string) ([]any, error) {
+func (h *Handler) getSessionFlash(
+	w http.ResponseWriter,
+	r *http.Request,
+	key string,
+) ([]any, error) {
 	session, err := h.CookieStore.Get(r, h.SessionName)
 	if err != nil {
 		return nil, fmt.Errorf("error getting session: %w", err)
@@ -191,13 +202,19 @@ func (h *Handler) getSessionFlash(w http.ResponseWriter, r *http.Request, key st
 	return res, nil
 }
 
-func (h *Handler) addSessionFlash(w http.ResponseWriter, r *http.Request, key string, value any) error {
+func (h *Handler) addSessionFlash(
+	w http.ResponseWriter,
+	r *http.Request,
+	key string,
+	value any,
+) error {
 	session, err := h.CookieStore.Get(r, h.SessionName)
 	if err != nil {
 		return fmt.Errorf("error getting session: %w", err)
 	}
 
 	session.AddFlash(value, key)
+
 	err = session.Save(r, w)
 	if err != nil {
 		return fmt.Errorf("error saving session: %w", err)
@@ -210,10 +227,18 @@ func (h *Handler) RecoverMW(next http.Handler) http.Handler {
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		defer func() {
 			if err := recover(); err != nil {
-				slog.ErrorContext(r.Context(), "recovered from panic", "error", err, "stack", debug.Stack())
-				http.Error(w, "internal error occured", http.StatusInternalServerError)
+				slog.ErrorContext(
+					r.Context(),
+					"recovered from panic",
+					"error",
+					err,
+					"stack",
+					debug.Stack(),
+				)
+				http.Error(w, "internal error occurred", http.StatusInternalServerError)
 			}
 		}()
+
 		next.ServeHTTP(w, r)
 	})
 }
@@ -223,8 +248,16 @@ func (h *Handler) AuthMiddleware() func(http.Handler) http.Handler {
 		return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 			username, err := h.getSessionValue(r, "username")
 			if err != nil && !errors.As(err, &SessionValueNotFoundError{}) {
-				slog.ErrorContext(r.Context(), "error on getting session value", "key", "username", "error", err)
+				slog.ErrorContext(
+					r.Context(),
+					"error on getting session value",
+					"key",
+					"username",
+					"error",
+					err,
+				)
 				http.Error(w, "error on getting session value", http.StatusInternalServerError)
+
 				return
 			}
 
@@ -234,12 +267,25 @@ func (h *Handler) AuthMiddleware() func(http.Handler) http.Handler {
 					if errors.As(err, &UserByUsernameNotFoundError{}) {
 						err = h.deleteSessionValue(w, r, "username")
 						if err != nil {
-							slog.ErrorContext(r.Context(), "error on deleting session value", "key", "username", "error", err)
-							http.Error(w, "error on deleting session value", http.StatusInternalServerError)
+							slog.ErrorContext(
+								r.Context(),
+								"error on deleting session value",
+								"key",
+								"username",
+								"error",
+								err,
+							)
+							http.Error(
+								w,
+								"error on deleting session value",
+								http.StatusInternalServerError,
+							)
+
 							return
 						}
 
 						next.ServeHTTP(w, r)
+
 						return
 					}
 
@@ -319,9 +365,11 @@ func (h *Handler) addWarningMessage(w http.ResponseWriter, r *http.Request, mess
 
 func (h *Handler) formErrorsFromSession(w http.ResponseWriter, r *http.Request) map[string]any {
 	slog.DebugContext(r.Context(), "retrieving form errors from session")
+
 	values, err := h.getSessionFlash(w, r, "formErrors")
 	if err != nil {
 		slog.ErrorContext(r.Context(), "error getting form errors from session", "error", err)
+
 		return nil
 	}
 
@@ -337,8 +385,14 @@ func (h *Handler) formErrorsFromSession(w http.ResponseWriter, r *http.Request) 
 	return errors
 }
 
-func (h *Handler) addFormErrorsToSession(w http.ResponseWriter, r *http.Request, formID string, val any) error {
+func (h *Handler) addFormErrorsToSession(
+	w http.ResponseWriter,
+	r *http.Request,
+	formID string,
+	val any,
+) error {
 	slog.DebugContext(r.Context(), "adding form errors to session", "formID", formID, "val", val)
+
 	err := h.addSessionFlash(w, r, "formErrors", map[string]any{formID: val})
 	if err != nil {
 		return fmt.Errorf("error adding form error to session: %w", err)
@@ -351,6 +405,7 @@ func (h *Handler) AuthenticatedOnly(next http.Handler) http.Handler {
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		if userFromContext(r.Context()) == nil {
 			http.Redirect(w, r, "/login", http.StatusSeeOther)
+
 			return
 		}
 
@@ -362,6 +417,7 @@ func (h *Handler) GuestOnly(next http.Handler) http.Handler {
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		if userFromContext(r.Context()) != nil {
 			http.Redirect(w, r, "/", http.StatusSeeOther)
+
 			return
 		}
 
@@ -369,7 +425,12 @@ func (h *Handler) GuestOnly(next http.Handler) http.Handler {
 	})
 }
 
-func (h *Handler) renderTemplate(w http.ResponseWriter, r *http.Request, name string, extraData map[string]any) {
+func (h *Handler) renderTemplate(
+	w http.ResponseWriter,
+	r *http.Request,
+	name string,
+	extraData map[string]any,
+) {
 	data := map[string]any{
 		"CurrentUser":   userFromContext(r.Context()),
 		"CurrentPath":   r.URL.Path,
@@ -396,6 +457,7 @@ func (h *Handler) HandleStatic(w http.ResponseWriter, r *http.Request) {
 func (h *Handler) HandleIndex(w http.ResponseWriter, r *http.Request) {
 	if r.URL.Path == "/" {
 		h.HandleHomePage(w, r)
+
 		return
 	}
 
@@ -405,6 +467,7 @@ func (h *Handler) HandleIndex(w http.ResponseWriter, r *http.Request) {
 func (h *Handler) HandleHealthz(w http.ResponseWriter, r *http.Request) {
 	if h.isShuttingDown.Load() {
 		http.Error(w, "Shutting down", http.StatusServiceUnavailable)
+
 		return
 	}
 
@@ -427,12 +490,14 @@ func (h *Handler) HandleHomePage(w http.ResponseWriter, r *http.Request) {
 		if err != nil {
 			slog.ErrorContext(r.Context(), "error on parse page number", "error", err, "page", page)
 			http.Error(w, "invalid page number", http.StatusBadRequest)
+
 			return
 		}
 
 		if pageNum < 1 {
 			slog.ErrorContext(r.Context(), "invalid page number", "page", pageNum)
 			http.Error(w, "invalid page number", http.StatusBadRequest)
+
 			return
 		}
 
@@ -443,6 +508,7 @@ func (h *Handler) HandleHomePage(w http.ResponseWriter, r *http.Request) {
 	if err != nil {
 		slog.ErrorContext(r.Context(), "failed to list posts", "error", err)
 		http.Error(w, "failed to list posts", http.StatusInternalServerError)
+
 		return
 	}
 
@@ -450,6 +516,7 @@ func (h *Handler) HandleHomePage(w http.ResponseWriter, r *http.Request) {
 	if err != nil {
 		slog.ErrorContext(r.Context(), "failed to count posts", "error", err)
 		http.Error(w, "failed to count posts", http.StatusInternalServerError)
+
 		return
 	}
 
@@ -516,8 +583,16 @@ func (h *Handler) HandleLogin() http.Handler {
 
 		err = h.setSessionValue(w, r, "username", user.Username)
 		if err != nil {
-			slog.ErrorContext(r.Context(), "error on setting session value", "key", "username", "error", err)
+			slog.ErrorContext(
+				r.Context(),
+				"error on setting session value",
+				"key",
+				"username",
+				"error",
+				err,
+			)
 			http.Error(w, "error on setting session value", http.StatusInternalServerError)
+
 			return
 		}
 
@@ -565,7 +640,14 @@ func (h *Handler) HandleRegister() http.Handler {
 		// FIXME: what to do on security?
 		usernameExists, err := h.UserRepo.ExistsByUsername(r.Context(), username)
 		if err != nil {
-			slog.ErrorContext(r.Context(), "error on checking user by username", "error", err, "username", username)
+			slog.ErrorContext(
+				r.Context(),
+				"error on checking user by username",
+				"error",
+				err,
+				"username",
+				username,
+			)
 			http.Error(w, "error on checking user", http.StatusInternalServerError)
 
 			return
@@ -580,7 +662,14 @@ func (h *Handler) HandleRegister() http.Handler {
 		// FIXME: what to do on security?
 		emailAddressExists, err := h.UserRepo.ExistsByEmailAddress(r.Context(), emailAddress)
 		if err != nil {
-			slog.ErrorContext(r.Context(), "error on checking user by email address", "error", err, "emailAddress", emailAddress)
+			slog.ErrorContext(
+				r.Context(),
+				"error on checking user by email address",
+				"error",
+				err,
+				"emailAddress",
+				emailAddress,
+			)
 			http.Error(w, "error on checking user", http.StatusInternalServerError)
 
 			return
@@ -623,8 +712,16 @@ func (h *Handler) HandleRegister() http.Handler {
 
 		err = h.setSessionValue(w, r, "username", user.Username)
 		if err != nil {
-			slog.ErrorContext(r.Context(), "error on setting session value", "key", "username", "error", err)
+			slog.ErrorContext(
+				r.Context(),
+				"error on setting session value",
+				"key",
+				"username",
+				"error",
+				err,
+			)
 			http.Error(w, "error on setting session value", http.StatusInternalServerError)
+
 			return
 		}
 
@@ -651,8 +748,16 @@ func (h *Handler) HandleLogout() http.Handler {
 	hf := http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		err := h.deleteSessionValue(w, r, "username")
 		if err != nil {
-			slog.ErrorContext(r.Context(), "error on deleting session value", "key", "username", "error", err)
+			slog.ErrorContext(
+				r.Context(),
+				"error on deleting session value",
+				"key",
+				"username",
+				"error",
+				err,
+			)
 			http.Error(w, "error on deleting session value", http.StatusInternalServerError)
+
 			return
 		}
 
@@ -681,12 +786,14 @@ func (h *Handler) HandleForgotPassword() http.Handler {
 		if err != nil {
 			slog.ErrorContext(r.Context(), "error on parse form", "error", err)
 			http.Error(w, "error on parse form", http.StatusInternalServerError)
+
 			return
 		}
 
 		emailAddress := r.FormValue("emailAddress")
 		if emailAddress == "" {
 			http.Error(w, "email address cannot be empty", http.StatusBadRequest)
+
 			return
 		}
 
@@ -695,11 +802,13 @@ func (h *Handler) HandleForgotPassword() http.Handler {
 			if errors.As(err, &UserByEmailNotFoundError{}) {
 				// Do not reveal if email exists for security
 				http.Redirect(w, r, "/", http.StatusSeeOther)
+
 				return
 			}
 
 			slog.ErrorContext(r.Context(), "error retrieving user by email", "error", err)
 			http.Error(w, "error retrieving user", http.StatusInternalServerError)
+
 			return
 		}
 
@@ -715,13 +824,18 @@ func (h *Handler) HandleForgotPassword() http.Handler {
 		if err := h.PasswordResetTokenRepo.Create(r.Context(), reset); err != nil {
 			slog.ErrorContext(r.Context(), "error saving reset token", "error", err)
 			http.Error(w, "error saving reset token", http.StatusInternalServerError)
+
 			return
 		}
 
 		// Send reset email
 		resetLink := fmt.Sprintf("%s/reset-password?token=%s", getHostURL(r), resetToken)
 		subject := "Password Reset Request"
-		body := fmt.Sprintf("To reset your password, click the following link:\n\n%s\n\nIf you did not request a password reset, you can ignore this email.", resetLink)
+		body := fmt.Sprintf(
+			"To reset your password, click the following link:\n\n%s\n\nIf you did not request a password reset, you can ignore this email.",
+			resetLink,
+		)
+
 		if err := h.Mailer.SendEmail(r.Context(), emailAddress, subject, body); err != nil {
 			slog.ErrorContext(r.Context(), "failed to send reset email", "error", err)
 			// Do not reveal error to user
@@ -750,6 +864,7 @@ func (h *Handler) HandleResetPasswordPage() http.Handler {
 		token := r.URL.Query().Get("token")
 		if token == "" {
 			http.Error(w, "token is required", http.StatusBadRequest)
+
 			return
 		}
 
@@ -770,12 +885,14 @@ func (h *Handler) HandleResetPassword() http.Handler {
 		if err != nil {
 			slog.ErrorContext(r.Context(), "error on parse form", "error", err)
 			http.Error(w, "error on parse form", http.StatusInternalServerError)
+
 			return
 		}
 
 		token := r.FormValue("token")
 		if token == "" {
 			http.Error(w, "reset token is required", http.StatusBadRequest)
+
 			return
 		}
 
@@ -783,11 +900,13 @@ func (h *Handler) HandleResetPassword() http.Handler {
 		if err != nil {
 			slog.ErrorContext(r.Context(), "invalid or expired reset token", "error", err)
 			http.Error(w, "invalid or expired reset token", http.StatusBadRequest)
+
 			return
 		}
 
 		if time.Now().After(resetToken.ExpiresAt) {
 			http.Error(w, "reset token has expired", http.StatusBadRequest)
+
 			return
 		}
 
@@ -795,17 +914,22 @@ func (h *Handler) HandleResetPassword() http.Handler {
 		if err != nil {
 			slog.ErrorContext(r.Context(), "user not found for reset token", "error", err)
 			http.Error(w, "user not found", http.StatusInternalServerError)
+
 			return
 		}
 
 		newPassword := r.FormValue("newPassword")
 		newPasswordConfirmation := r.FormValue("newPasswordConfirmation")
+
 		if newPassword == "" || newPasswordConfirmation == "" {
 			http.Error(w, "password and confirmation cannot be empty", http.StatusBadRequest)
+
 			return
 		}
+
 		if newPassword != newPasswordConfirmation {
 			http.Error(w, "password and confirmation do not match", http.StatusBadRequest)
+
 			return
 		}
 
@@ -813,14 +937,17 @@ func (h *Handler) HandleResetPassword() http.Handler {
 		if err != nil {
 			slog.ErrorContext(r.Context(), "error hashing new password", "error", err)
 			http.Error(w, "error hashing new password", http.StatusInternalServerError)
+
 			return
 		}
 
 		user.PasswordHash = string(newPasswordHash)
 		user.UpdatedAt = time.Now()
+
 		if err := h.UserRepo.Update(r.Context(), user); err != nil {
 			slog.ErrorContext(r.Context(), "error updating user password", "error", err)
 			http.Error(w, "error updating password", http.StatusInternalServerError)
+
 			return
 		}
 
@@ -853,6 +980,7 @@ func (h *Handler) HandleProfileUpdate() http.Handler {
 		if err != nil {
 			slog.ErrorContext(r.Context(), "error on parse form", "error", err)
 			http.Error(w, "error on parse form", http.StatusInternalServerError)
+
 			return
 		}
 
@@ -870,6 +998,7 @@ func (h *Handler) HandleProfileUpdate() http.Handler {
 		if err != nil {
 			slog.ErrorContext(r.Context(), "error on update user", "error", err)
 			http.Error(w, "error on update user", http.StatusInternalServerError)
+
 			return
 		}
 
@@ -887,6 +1016,7 @@ func (h *Handler) HandleProfilePasswordUpdate() http.Handler {
 			slog.ErrorContext(r.Context(), "error on parse form", "error", err)
 			h.addErrorMessage(w, r, "Error on parse form.")
 			http.Redirect(w, r, "/profile", http.StatusSeeOther)
+
 			return
 		}
 
@@ -903,7 +1033,12 @@ func (h *Handler) HandleProfilePasswordUpdate() http.Handler {
 		}
 
 		if currentPassword == "" || newPassword == "" {
-			http.Error(w, "current password and new password cannot be empty", http.StatusBadRequest)
+			http.Error(
+				w,
+				"current password and new password cannot be empty",
+				http.StatusBadRequest,
+			)
+
 			return
 		}
 
@@ -919,7 +1054,9 @@ func (h *Handler) HandleProfilePasswordUpdate() http.Handler {
 				slog.ErrorContext(r.Context(), "error adding form errors to session", "error", err)
 				h.addErrorMessage(w, r, "Error adding form errors.")
 			}
+
 			http.Redirect(w, r, "/profile", http.StatusSeeOther)
+
 			return
 		}
 
@@ -928,6 +1065,7 @@ func (h *Handler) HandleProfilePasswordUpdate() http.Handler {
 			slog.ErrorContext(r.Context(), "error on hash new password", "error", err)
 			h.addErrorMessage(w, r, "Error on hash new password.")
 			http.Redirect(w, r, "/profile", http.StatusSeeOther)
+
 			return
 		}
 
@@ -938,6 +1076,7 @@ func (h *Handler) HandleProfilePasswordUpdate() http.Handler {
 			slog.ErrorContext(r.Context(), "error on update user", "error", err)
 			h.addErrorMessage(w, r, "Error on update user.")
 			http.Redirect(w, r, "/profile", http.StatusSeeOther)
+
 			return
 		}
 
@@ -951,10 +1090,12 @@ func (h *Handler) HandleProfilePasswordUpdate() http.Handler {
 func (h *Handler) HandleViewPostPage() http.Handler {
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		postSlug := r.PathValue("postSlug")
+
 		post, err := h.PostRepo.GetBySlug(r.Context(), postSlug)
 		if err != nil {
 			slog.ErrorContext(r.Context(), "failed to list posts", "error", err)
 			http.Error(w, "failed to list posts", http.StatusInternalServerError)
+
 			return
 		}
 
@@ -962,6 +1103,7 @@ func (h *Handler) HandleViewPostPage() http.Handler {
 		if err != nil {
 			slog.ErrorContext(r.Context(), "failed to post comments", "error", err)
 			http.Error(w, "failed to list post comments", http.StatusInternalServerError)
+
 			return
 		}
 
@@ -1005,12 +1147,14 @@ func (h *Handler) HandleCreatePost() http.Handler {
 		if slug == "" {
 			slug = title
 		}
+
 		slug = slugify.Make(slug)
 
 		uniqueSlug, err := h.generateUniqueSlug(r.Context(), slug)
 		if err != nil {
 			slog.ErrorContext(r.Context(), "error generating unique slug", "error", err)
 			http.Error(w, "error generating unique slug", http.StatusInternalServerError)
+
 			return
 		}
 
@@ -1055,9 +1199,17 @@ func (h *Handler) HandleCreatePost() http.Handler {
 func (h *Handler) HandleEditPostPage() http.Handler {
 	hf := http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		postSlug := r.PathValue("postSlug")
+
 		post, err := h.PostRepo.GetBySlug(r.Context(), postSlug)
 		if err != nil {
-			slog.ErrorContext(r.Context(), "error on get post by slug", "error", err, "postSlug", postSlug)
+			slog.ErrorContext(
+				r.Context(),
+				"error on get post by slug",
+				"error",
+				err,
+				"postSlug",
+				postSlug,
+			)
 			http.Error(w, "error on get post by slug", http.StatusInternalServerError)
 
 			return
@@ -1078,22 +1230,33 @@ func (h *Handler) HandleEditPostPage() http.Handler {
 
 		h.renderTemplate(w, r, "edit-post-page.gohtml", data)
 	})
+
 	return h.AuthenticatedOnly(hf)
 }
 
 func (h *Handler) HandleEditPost() http.Handler {
 	hf := http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		postSlug := r.PathValue("postSlug")
+
 		post, err := h.PostRepo.GetBySlug(r.Context(), postSlug)
 		if err != nil {
-			slog.ErrorContext(r.Context(), "error on get post by slug", "error", err, "postSlug", postSlug)
+			slog.ErrorContext(
+				r.Context(),
+				"error on get post by slug",
+				"error",
+				err,
+				"postSlug",
+				postSlug,
+			)
 			http.Error(w, "error on get post by slug", http.StatusInternalServerError)
+
 			return
 		}
 
 		user := userFromContext(r.Context())
 		if post.AuthorID != user.ID {
 			http.Error(w, "cannot edit post", http.StatusForbidden)
+
 			return
 		}
 
@@ -1113,16 +1276,19 @@ func (h *Handler) HandleEditPost() http.Handler {
 		if slug == "" {
 			slug = title
 		}
+
 		slug = slugify.Make(slug)
 
 		uniqueSlug := slug
 
 		if uniqueSlug != post.Slug {
 			var err error
+
 			uniqueSlug, err = h.generateUniqueSlug(r.Context(), slug)
 			if err != nil {
 				slog.ErrorContext(r.Context(), "error generating unique slug", "error", err)
 				http.Error(w, "error generating unique slug", http.StatusInternalServerError)
+
 				return
 			}
 		}
@@ -1159,9 +1325,17 @@ func (h *Handler) HandleEditPost() http.Handler {
 func (h *Handler) HandleDeletePostPage() http.Handler {
 	hf := http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		postSlug := r.PathValue("postSlug")
+
 		post, err := h.PostRepo.GetBySlug(r.Context(), postSlug)
 		if err != nil {
-			slog.ErrorContext(r.Context(), "error on get post by slug", "error", err, "postSlug", postSlug)
+			slog.ErrorContext(
+				r.Context(),
+				"error on get post by slug",
+				"error",
+				err,
+				"postSlug",
+				postSlug,
+			)
 			http.Error(w, "error on get post by slug", http.StatusInternalServerError)
 
 			return
@@ -1188,9 +1362,17 @@ func (h *Handler) HandleDeletePostPage() http.Handler {
 func (h *Handler) HandleDeletePost() http.Handler {
 	hf := http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		postSlug := r.PathValue("postSlug")
+
 		post, err := h.PostRepo.GetBySlug(r.Context(), postSlug)
 		if err != nil {
-			slog.ErrorContext(r.Context(), "error on get post by slug", "error", err, "postSlug", postSlug)
+			slog.ErrorContext(
+				r.Context(),
+				"error on get post by slug",
+				"error",
+				err,
+				"postSlug",
+				postSlug,
+			)
 			http.Error(w, "error on get post by slug", http.StatusInternalServerError)
 
 			return
@@ -1237,7 +1419,14 @@ func (h *Handler) HandleSubmitComment() http.Handler {
 
 		post, err := h.PostRepo.GetByID(r.Context(), postID)
 		if err != nil {
-			slog.ErrorContext(r.Context(), "error on get post by id", "error", err, "postId", postID)
+			slog.ErrorContext(
+				r.Context(),
+				"error on get post by id",
+				"error",
+				err,
+				"postId",
+				postID,
+			)
 			http.Error(w, "error on get post by id", http.StatusInternalServerError)
 
 			return
@@ -1272,9 +1461,17 @@ func (h *Handler) HandleSubmitComment() http.Handler {
 func (h *Handler) HandleEditCommentPage() http.Handler {
 	hf := http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		commentID := r.PathValue("commentId")
+
 		comment, err := h.CommentRepo.GetByID(r.Context(), commentID)
 		if err != nil {
-			slog.ErrorContext(r.Context(), "error on get comment by id", "error", err, "commentId", commentID)
+			slog.ErrorContext(
+				r.Context(),
+				"error on get comment by id",
+				"error",
+				err,
+				"commentId",
+				commentID,
+			)
 			http.Error(w, "error on get comment by id", http.StatusInternalServerError)
 
 			return
@@ -1290,7 +1487,14 @@ func (h *Handler) HandleEditCommentPage() http.Handler {
 
 		post, err := h.PostRepo.GetByID(r.Context(), comment.PostID)
 		if err != nil {
-			slog.ErrorContext(r.Context(), "error on get post by id", "error", err, "postId", comment.PostID)
+			slog.ErrorContext(
+				r.Context(),
+				"error on get post by id",
+				"error",
+				err,
+				"postId",
+				comment.PostID,
+			)
 			http.Error(w, "error on get post by id", http.StatusInternalServerError)
 
 			return
@@ -1326,7 +1530,14 @@ func (h *Handler) HandleEditComment() http.Handler {
 
 		comment, err := h.CommentRepo.GetByID(r.Context(), commentID)
 		if err != nil {
-			slog.ErrorContext(r.Context(), "error on get comment by id", "error", err, "commentId", commentID)
+			slog.ErrorContext(
+				r.Context(),
+				"error on get comment by id",
+				"error",
+				err,
+				"commentId",
+				commentID,
+			)
 			http.Error(w, "error on get comment by id", http.StatusInternalServerError)
 
 			return
@@ -1355,7 +1566,14 @@ func (h *Handler) HandleEditComment() http.Handler {
 
 		post, err := h.PostRepo.GetByID(r.Context(), comment.PostID)
 		if err != nil {
-			slog.ErrorContext(r.Context(), "error on get post by id", "error", err, "postId", comment.PostID)
+			slog.ErrorContext(
+				r.Context(),
+				"error on get post by id",
+				"error",
+				err,
+				"postId",
+				comment.PostID,
+			)
 			http.Error(w, "error on get post by id", http.StatusInternalServerError)
 
 			return
@@ -1370,9 +1588,17 @@ func (h *Handler) HandleEditComment() http.Handler {
 func (h *Handler) HandleDeleteCommentPage() http.Handler {
 	hf := http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		commentID := r.PathValue("commentId")
+
 		comment, err := h.CommentRepo.GetByID(r.Context(), commentID)
 		if err != nil {
-			slog.ErrorContext(r.Context(), "error on get comment by id", "error", err, "commentId", commentID)
+			slog.ErrorContext(
+				r.Context(),
+				"error on get comment by id",
+				"error",
+				err,
+				"commentId",
+				commentID,
+			)
 			http.Error(w, "error on get comment by id", http.StatusInternalServerError)
 
 			return
@@ -1388,7 +1614,14 @@ func (h *Handler) HandleDeleteCommentPage() http.Handler {
 
 		post, err := h.PostRepo.GetByID(r.Context(), comment.PostID)
 		if err != nil {
-			slog.ErrorContext(r.Context(), "error on get post by id", "error", err, "postId", comment.PostID)
+			slog.ErrorContext(
+				r.Context(),
+				"error on get post by id",
+				"error",
+				err,
+				"postId",
+				comment.PostID,
+			)
 			http.Error(w, "error on get post by id", http.StatusInternalServerError)
 
 			return
@@ -1412,7 +1645,14 @@ func (h *Handler) HandleDeleteComment() http.Handler {
 
 		comment, err := h.CommentRepo.GetByID(r.Context(), commentID)
 		if err != nil {
-			slog.ErrorContext(r.Context(), "error on get comment by id", "error", err, "commentId", commentID)
+			slog.ErrorContext(
+				r.Context(),
+				"error on get comment by id",
+				"error",
+				err,
+				"commentId",
+				commentID,
+			)
 			http.Error(w, "error on get comment by id", http.StatusInternalServerError)
 
 			return
@@ -1438,7 +1678,14 @@ func (h *Handler) HandleDeleteComment() http.Handler {
 
 		post, err := h.PostRepo.GetByID(r.Context(), comment.PostID)
 		if err != nil {
-			slog.ErrorContext(r.Context(), "error on get post by id", "error", err, "postId", comment.PostID)
+			slog.ErrorContext(
+				r.Context(),
+				"error on get post by id",
+				"error",
+				err,
+				"postId",
+				comment.PostID,
+			)
 			http.Error(w, "error on get post by id", http.StatusInternalServerError)
 
 			return
@@ -1491,6 +1738,7 @@ func (h *Handler) generateUniqueSlug(ctx context.Context, baseSlug string) (stri
 
 	for {
 		candidateSlug := basePart + "-" + fmt.Sprintf("%d", counter)
+
 		exists, err := h.PostRepo.SlugExists(ctx, candidateSlug)
 		if err != nil {
 			return "", err

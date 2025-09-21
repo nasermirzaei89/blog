@@ -33,7 +33,10 @@ func scanPasswordResetToken(rs squirrel.RowScanner) (*PasswordResetToken, error)
 	return &token, nil
 }
 
-func (repo *PasswordResetTokenRepository) GetByToken(ctx context.Context, tokenStr string) (*PasswordResetToken, error) {
+func (repo *PasswordResetTokenRepository) GetByToken(
+	ctx context.Context,
+	tokenStr string,
+) (*PasswordResetToken, error) {
 	q := squirrel.Select("*").From("password_reset_tokens").Where(squirrel.Eq{"token": tokenStr})
 
 	q = q.RunWith(repo.DB)
@@ -50,7 +53,10 @@ func (repo *PasswordResetTokenRepository) GetByToken(ctx context.Context, tokenS
 	return token, nil
 }
 
-func (repo *PasswordResetTokenRepository) Create(ctx context.Context, token *PasswordResetToken) error {
+func (repo *PasswordResetTokenRepository) Create(
+	ctx context.Context,
+	token *PasswordResetToken,
+) error {
 	q := squirrel.Insert("password_reset_tokens").
 		Columns("id", "user_id", "token", "created_at", "expires_at").
 		Values(token.ID, token.UserID, token.Token, token.CreatedAt, token.ExpiresAt).

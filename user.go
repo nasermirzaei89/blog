@@ -29,7 +29,16 @@ type UserRepository struct {
 func scanUser(rs squirrel.RowScanner) (*User, error) {
 	var user User
 
-	err := rs.Scan(&user.ID, &user.Username, &user.EmailAddress, &user.PasswordHash, &user.Name, &user.AvatarURL, &user.CreatedAt, &user.UpdatedAt)
+	err := rs.Scan(
+		&user.ID,
+		&user.Username,
+		&user.EmailAddress,
+		&user.PasswordHash,
+		&user.Name,
+		&user.AvatarURL,
+		&user.CreatedAt,
+		&user.UpdatedAt,
+	)
 	if err != nil {
 		return nil, fmt.Errorf("error on scan row: %w", err)
 	}
@@ -70,9 +79,13 @@ func (err UserByEmailNotFoundError) Error() string {
 	return fmt.Sprintf("user by email address '%s' not found", err.EmailAddress)
 }
 
-func (repo *UserRepository) GetByEmailAddress(ctx context.Context, emailAddress string) (*User, error) {
+func (repo *UserRepository) GetByEmailAddress(
+	ctx context.Context,
+	emailAddress string,
+) (*User, error) {
 	q := squirrel.Select("*").From("users").Where(squirrel.Eq{"email_address": emailAddress})
 	q = q.RunWith(repo.DB)
+
 	user, err := scanUser(q.QueryRowContext(ctx))
 	if err != nil {
 		if errors.Is(err, sql.ErrNoRows) {
@@ -96,13 +109,16 @@ func (err UserByIDNotFoundError) Error() string {
 func (repo *UserRepository) GetByID(ctx context.Context, id string) (*User, error) {
 	q := squirrel.Select("*").From("users").Where(squirrel.Eq{"id": id})
 	q = q.RunWith(repo.DB)
+
 	user, err := scanUser(q.QueryRowContext(ctx))
 	if err != nil {
 		if errors.Is(err, sql.ErrNoRows) {
 			return nil, UserByIDNotFoundError{ID: id}
 		}
+
 		return nil, fmt.Errorf("error on scan user: %w", err)
 	}
+
 	return user, nil
 }
 
@@ -174,7 +190,10 @@ func (repo *UserRepository) ExistsByUsername(ctx context.Context, username strin
 	return true, nil
 }
 
-func (repo *UserRepository) ExistsByEmailAddress(ctx context.Context, emailAddress string) (bool, error) {
+func (repo *UserRepository) ExistsByEmailAddress(
+	ctx context.Context,
+	emailAddress string,
+) (bool, error) {
 	q := squirrel.Select("1").From("users").Where(squirrel.Eq{"email_address": emailAddress})
 
 	q = q.RunWith(repo.DB)

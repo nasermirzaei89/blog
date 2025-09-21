@@ -31,7 +31,11 @@ build: npm-build .which-go ## Build binary
 .PHONY: format
 format: .which-go ## Format files
 	go mod tidy
-	gofmt -s -w $(ROOT)
+	golangci-lint fmt $(ROOT)/...
+
+.PHONY: lint
+lint: .which-go ## Lint files
+	golangci-lint run $(ROOT)/...
 
 .PHONY: test
 test: .which-go ## Run tests

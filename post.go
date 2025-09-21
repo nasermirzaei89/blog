@@ -77,11 +77,14 @@ func (repo *PostRepository) List(ctx context.Context, params ListPostsParams) ([
 func (repo *PostRepository) Count(ctx context.Context) (int, error) {
 	q := squirrel.Select("COUNT(*)").From("posts")
 	q = q.RunWith(repo.DB)
+
 	var count int
+
 	err := q.QueryRowContext(ctx).Scan(&count)
 	if err != nil {
 		return 0, fmt.Errorf("error on count posts: %w", err)
 	}
+
 	return count, nil
 }
 
@@ -117,6 +120,7 @@ func (repo *PostRepository) SlugExists(ctx context.Context, slug string) (bool, 
 	q = q.RunWith(repo.DB)
 
 	var count int
+
 	err := q.QueryRowContext(ctx).Scan(&count)
 	if err != nil {
 		return false, fmt.Errorf("error on query slug existence: %w", err)
@@ -128,7 +132,16 @@ func (repo *PostRepository) SlugExists(ctx context.Context, slug string) (bool, 
 func scanPost(rs squirrel.RowScanner) (*Post, error) {
 	var post Post
 
-	err := rs.Scan(&post.ID, &post.Title, &post.Slug, &post.Excerpt, &post.Content, &post.AuthorID, &post.CreatedAt, &post.UpdatedAt)
+	err := rs.Scan(
+		&post.ID,
+		&post.Title,
+		&post.Slug,
+		&post.Excerpt,
+		&post.Content,
+		&post.AuthorID,
+		&post.CreatedAt,
+		&post.UpdatedAt,
+	)
 	if err != nil {
 		return nil, fmt.Errorf("error on scan row: %w", err)
 	}

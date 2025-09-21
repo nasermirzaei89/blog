@@ -44,7 +44,17 @@ func (repo *CommentRepository) Create(ctx context.Context, comment *Comment) err
 func scanComment(rs squirrel.RowScanner) (*Comment, error) {
 	var comment Comment
 
-	err := rs.Scan(&comment.ID, &comment.PostID, &comment.UserID, &comment.UserUsername, &comment.UserName, &comment.UserAvatarURL, &comment.Content, &comment.CreatedAt, &comment.UpdatedAt)
+	err := rs.Scan(
+		&comment.ID,
+		&comment.PostID,
+		&comment.UserID,
+		&comment.UserUsername,
+		&comment.UserName,
+		&comment.UserAvatarURL,
+		&comment.Content,
+		&comment.CreatedAt,
+		&comment.UpdatedAt,
+	)
 	if err != nil {
 		return nil, fmt.Errorf("error on scan row: %w", err)
 	}
@@ -56,7 +66,10 @@ type ListCommentsParams struct {
 	PostID string
 }
 
-func (repo *CommentRepository) List(ctx context.Context, params ListCommentsParams) ([]*Comment, error) {
+func (repo *CommentRepository) List(
+	ctx context.Context,
+	params ListCommentsParams,
+) ([]*Comment, error) {
 	q := squirrel.Select(
 		"c.id",
 		"c.post_id",

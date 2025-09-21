@@ -35,6 +35,7 @@ func Run(ctx context.Context) error {
 
 	// Database
 	dbDSN := env.GetString("DB_DSN", ":memory:")
+
 	db, err := sql.Open("sqlite3", dbDSN)
 	if err != nil {
 		return fmt.Errorf("error on open database: %w", err)
@@ -62,7 +63,9 @@ func Run(ctx context.Context) error {
 	}
 
 	//
-	tmpl, err := template.New("").Funcs(Funcs).ParseFS(embeddedFS, "templates/*.gohtml", "templates/icons/*.svg")
+	tmpl, err := template.New("").
+		Funcs(Funcs).
+		ParseFS(embeddedFS, "templates/*.gohtml", "templates/icons/*.svg")
 	if err != nil {
 		return fmt.Errorf("error on parse templates: %w", err)
 	}
@@ -97,7 +100,10 @@ func Run(ctx context.Context) error {
 		HTMLPolicy:             bluemonday.UGCPolicy(),
 		TextPolicy:             bluemonday.StrictPolicy(),
 		CSRFAuthKeys:           []byte(env.MustGetString("CSRF_AUTH_KEY")),
-		CSRFTrustedOrigins:     env.GetStringSlice("CSRF_TRUSTED_ORIGINS", []string{"localhost:8080"}),
+		CSRFTrustedOrigins: env.GetStringSlice(
+			"CSRF_TRUSTED_ORIGINS",
+			[]string{"localhost:8080"},
+		),
 	}
 
 	// HTTP Server

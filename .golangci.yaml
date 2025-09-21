@@ -1,0 +1,46 @@
+version: "2"
+run:
+  timeout: "1m"
+  tests: true
+  allow-parallel-runners: false
+  allow-serial-runners: false
+linters:
+  default: all
+  disable:
+    - wsl
+    - contextcheck
+    - cyclop
+    - depguard
+    - dupl
+    - err113
+    - errcheck
+    - exhaustruct
+    - forcetypeassert
+    - funcorder
+    - funlen
+    - gochecknoglobals
+    - gochecknoinits
+    - godot
+    - godox
+    - gosec
+    - lll
+    - mnd
+    - nestif
+    - noinlineerr
+    - paralleltest
+    - perfsprint
+    - revive
+    - staticcheck
+    - unused
+    - varnamelen
+formatters:
+  enable:
+    - gci
+    - gofmt
+    - gofumpt
+    - goimports
+    - golines
+  settings:
+    golines:
+      max-len: 120
+      shorten-comments: true

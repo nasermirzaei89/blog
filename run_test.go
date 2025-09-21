@@ -227,13 +227,16 @@ func runServer(t *testing.T) *httptest.Server {
 	cookieStore := sessions.NewCookieStore([]byte("test-session-key"))
 	sessionName := "test-blog"
 
-	tmpl, err := template.New("").Funcs(blog.Funcs).ParseFS(fsys, "templates/*.gohtml", "templates/icons/*.svg")
+	tmpl, err := template.New("").
+		Funcs(blog.Funcs).
+		ParseFS(fsys, "templates/*.gohtml", "templates/icons/*.svg")
 	if err != nil {
 		t.Fatalf("could not parse templates: %v", err)
 	}
 
 	// Database
 	dbDSN := ":memory:"
+
 	db, err := sql.Open("sqlite3", dbDSN)
 	if err != nil {
 		t.Fatalf("could not open database: %v", err)

@@ -28,6 +28,7 @@ func (mailer *SMTPMailer) SendEmail(ctx context.Context, to, subject, body strin
 	}
 
 	addr := fmt.Sprintf("%s:%s", mailer.Host, mailer.Port)
+
 	err := smtp.SendMail(addr, auth, mailer.From, []string{to}, msg)
 	if err != nil {
 		return fmt.Errorf("failed to send email: %w", err)
