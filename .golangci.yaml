@@ -8,7 +8,6 @@ linters:
   default: all
   disable:
     - wsl
-    - contextcheck
     - cyclop
     - depguard
     - dupl

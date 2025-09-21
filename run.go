@@ -140,7 +140,7 @@ func Run(ctx context.Context) error {
 		shutdownCtx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
 		defer cancel()
 
-		err = server.Shutdown(shutdownCtx)
+		err = server.Shutdown(shutdownCtx) //nolint:contextcheck
 		if err != nil {
 			return fmt.Errorf("error shutting down server: %w", err)
 		}

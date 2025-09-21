@@ -225,19 +225,19 @@ func (h *Handler) addSessionFlash(
 
 func (h *Handler) RecoverMW(next http.Handler) http.Handler {
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		defer func() {
+		defer func(ctx context.Context) {
 			if err := recover(); err != nil {
 				slog.ErrorContext(
-					r.Context(),
+					ctx,
 					"recovered from panic",
 					"error",
 					err,
 					"stack",
-					debug.Stack(),
+					string(debug.Stack()),
 				)
 				http.Error(w, "internal error occurred", http.StatusInternalServerError)
 			}
-		}()
+		}(r.Context())
 
 		next.ServeHTTP(w, r)
 	})
