@@ -35,7 +35,8 @@ func runApp(serverURL string) func(t *testing.T) {
 		if err != nil {
 			t.Fatalf("could not run Playwright: %v", err)
 		}
-		defer pw.Stop()
+
+		defer func() { _ = pw.Stop() }()
 
 		browser, err := pw.Chromium.Launch(playwright.BrowserTypeLaunchOptions{
 			Headless: playwright.Bool(true),
@@ -43,13 +44,15 @@ func runApp(serverURL string) func(t *testing.T) {
 		if err != nil {
 			t.Fatalf("could not launch browser: %v", err)
 		}
-		defer browser.Close()
+
+		defer func() { _ = browser.Close() }()
 
 		context, err := browser.NewContext()
 		if err != nil {
 			t.Fatalf("could not create context: %v", err)
 		}
-		defer context.Close()
+
+		defer func() { _ = context.Close() }()
 
 		page, err := context.NewPage()
 		if err != nil {

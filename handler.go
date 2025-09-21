@@ -465,7 +465,7 @@ func (h *Handler) HandleHealthz(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	w.Write([]byte("OK"))
+	_, _ = w.Write([]byte("ok"))
 }
 
 func (h *Handler) HandleHomePage(w http.ResponseWriter, r *http.Request) {
