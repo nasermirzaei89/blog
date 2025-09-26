@@ -22,6 +22,7 @@
         </div>
         {{ end }}
     </div>
+    {{ if gt (add .CurrentPage .TotalPages) 2 }}
     <nav class="flex justify-between items-center mt-4">
         <div>
             {{ if gt .CurrentPage 1 }}
@@ -45,6 +46,7 @@
             {{ end }}
         </div>
     </nav>
+    {{ end }}
 </main>
 
 {{ template "footer.gohtml" }}

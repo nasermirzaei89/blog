@@ -450,6 +450,12 @@ func (h *Handler) renderTemplate(
 
 	maps.Copy(data, extraData)
 
+	data["Title"] = "My Awesome Blog"
+
+	if extraData["Title"] != nil {
+		data["Title"] = fmt.Sprintf("%s | %s", extraData["Title"], data["Title"])
+	}
+
 	err := h.template.ExecuteTemplate(w, name, data)
 	if err != nil {
 		slog.ErrorContext(r.Context(), "failed to execute template", "error", err)
@@ -543,6 +549,7 @@ func (h *Handler) HandleLoginPage() http.Handler {
 	hf := http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		data := map[string]any{
 			csrf.TemplateTag: csrf.TemplateField(r),
+			"Title":          "Login",
 		}
 
 		h.renderTemplate(w, r, "login-page.gohtml", data)
@@ -616,6 +623,7 @@ func (h *Handler) HandleRegisterPage() http.Handler {
 	hf := http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		data := map[string]any{
 			csrf.TemplateTag: csrf.TemplateField(r),
+			"Title":          "Register",
 		}
 
 		h.renderTemplate(w, r, "register-page.gohtml", data)
@@ -744,6 +752,7 @@ func (h *Handler) HandleLogoutPage() http.Handler {
 	hf := http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		data := map[string]any{
 			csrf.TemplateTag: csrf.TemplateField(r),
+			"Title":          "Logout",
 		}
 
 		h.renderTemplate(w, r, "logout-page.gohtml", data)
@@ -780,6 +789,7 @@ func (h *Handler) HandleForgotPasswordPage() http.Handler {
 	hf := http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		data := map[string]any{
 			csrf.TemplateTag: csrf.TemplateField(r),
+			"Title":          "Forgot Password",
 		}
 
 		h.renderTemplate(w, r, "forgot-password-page.gohtml", data)
@@ -882,6 +892,7 @@ func (h *Handler) HandleResetPasswordPage() http.Handler {
 		data := map[string]any{
 			csrf.TemplateTag: csrf.TemplateField(r),
 			"Token":          token,
+			"Title":          "Reset Password",
 		}
 
 		h.renderTemplate(w, r, "reset-password-page.gohtml", data)
@@ -979,6 +990,7 @@ func (h *Handler) HandleProfilePage() http.Handler {
 	hf := http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		data := map[string]any{
 			csrf.TemplateTag: csrf.TemplateField(r),
+			"Title":          "Profile",
 		}
 
 		h.renderTemplate(w, r, "profile-page.gohtml", data)
@@ -1131,6 +1143,8 @@ func (h *Handler) HandleViewPostPage() http.Handler {
 			csrf.TemplateTag: csrf.TemplateField(r),
 			"Post":           post,
 			"PostComments":   comments,
+			"Title":          post.Title,
+			"Description":    post.Excerpt,
 		}
 
 		h.renderTemplate(w, r, "single-post-page.gohtml", data)
@@ -1141,6 +1155,7 @@ func (h *Handler) HandleNewPostPage() http.Handler {
 	hf := http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		data := map[string]any{
 			csrf.TemplateTag: csrf.TemplateField(r),
+			"Title":          "New Post",
 		}
 
 		h.renderTemplate(w, r, "new-post-page.gohtml", data)
@@ -1218,6 +1233,7 @@ func (h *Handler) HandleEditPostPage() http.Handler {
 		data := map[string]any{
 			csrf.TemplateTag: csrf.TemplateField(r),
 			"Post":           post,
+			"Title":          "Edit Post",
 		}
 
 		h.renderTemplate(w, r, "edit-post-page.gohtml", data)
@@ -1328,6 +1344,7 @@ func (h *Handler) HandleDeletePostPage() http.Handler {
 		data := map[string]any{
 			csrf.TemplateTag: csrf.TemplateField(r),
 			"Post":           post,
+			"Title":          "Delete Post",
 		}
 
 		h.renderTemplate(w, r, "delete-post-page.gohtml", data)
@@ -1480,6 +1497,7 @@ func (h *Handler) HandleEditCommentPage() http.Handler {
 			csrf.TemplateTag: csrf.TemplateField(r),
 			"Comment":        comment,
 			"Post":           post,
+			"Title":          "Edit Comment",
 		}
 
 		h.renderTemplate(w, r, "edit-comment-page.gohtml", data)
@@ -1606,6 +1624,7 @@ func (h *Handler) HandleDeleteCommentPage() http.Handler {
 			csrf.TemplateTag: csrf.TemplateField(r),
 			"Comment":        comment,
 			"Post":           post,
+			"Title":          "Delete Comment",
 		}
 
 		h.renderTemplate(w, r, "delete-comment-page.gohtml", data)
