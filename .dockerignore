@@ -1,6 +1,6 @@
 bin/
-blog.db
-node_modules/
+*.sqlite3
+web/node_modules/
 .env
 .git
 .gitignore

@@ -1,4 +1,4 @@
-package blog_test
+package fullstackgo_test
 
 import (
 	"context"
@@ -9,9 +9,9 @@ import (
 
 	"github.com/gorilla/sessions"
 	"github.com/microcosm-cc/bluemonday"
-	"github.com/nasermirzaei89/blog/db/sqlite3"
-	"github.com/nasermirzaei89/blog/mailer"
-	"github.com/nasermirzaei89/blog/web"
+	"github.com/nasermirzaei89/fullstackgo/db/sqlite3"
+	"github.com/nasermirzaei89/fullstackgo/mailer"
+	"github.com/nasermirzaei89/fullstackgo/web"
 	"github.com/playwright-community/playwright-go"
 )
 
@@ -67,8 +67,10 @@ func runApp(serverURL string) func(t *testing.T) {
 			t.Fatalf("could not get title: %v", err)
 		}
 
-		if title != "Blog" {
-			t.Errorf("expected title 'Blog', got '%s'", title)
+		expectedTitle := "My Awesome Blog"
+
+		if title != expectedTitle {
+			t.Errorf("expected title '%s', got '%s'", expectedTitle, title)
 		}
 
 		t.Run("Register", runRegister(page))
@@ -253,7 +255,7 @@ func runServer(t *testing.T) *httptest.Server {
 	ctx := context.Background()
 
 	cookieStore := sessions.NewCookieStore([]byte("test-session-key"))
-	sessionName := "test-blog"
+	sessionName := "fullstackgo-test"
 
 	// Database
 	dbDSN := ":memory:"

@@ -16,6 +16,6 @@ RUN make build
 
 FROM alpine
 
-COPY --from=builder /src/bin/blog /
+COPY --from=builder /src/bin/fullstackgo /
 
-ENTRYPOINT ["/blog"]
+ENTRYPOINT ["/fullstackgo"]

@@ -23,7 +23,7 @@ import (
 	"github.com/gorilla/sessions"
 	slugify "github.com/gosimple/slug"
 	"github.com/microcosm-cc/bluemonday"
-	"github.com/nasermirzaei89/blog/mailer"
+	"github.com/nasermirzaei89/fullstackgo/mailer"
 	"golang.org/x/crypto/bcrypt"
 )
 

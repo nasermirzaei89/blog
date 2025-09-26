@@ -1,4 +1,4 @@
-package blog
+package fullstackgo
 
 import (
 	"context"
@@ -15,10 +15,10 @@ import (
 	_ "github.com/joho/godotenv/autoload"
 	_ "github.com/mattn/go-sqlite3"
 	"github.com/microcosm-cc/bluemonday"
-	"github.com/nasermirzaei89/blog/db/sqlite3"
-	"github.com/nasermirzaei89/blog/mailer"
-	"github.com/nasermirzaei89/blog/web"
 	"github.com/nasermirzaei89/env"
+	"github.com/nasermirzaei89/fullstackgo/db/sqlite3"
+	"github.com/nasermirzaei89/fullstackgo/mailer"
+	"github.com/nasermirzaei89/fullstackgo/web"
 )
 
 const (
@@ -54,7 +54,7 @@ func Run(ctx context.Context) error {
 
 	// Session
 	cookieStore := sessions.NewCookieStore([]byte(env.MustGetString("SESSION_KEY")))
-	sessionName := env.GetString("SESSION_NAME", "blog")
+	sessionName := env.GetString("SESSION_NAME", "fullstackgo")
 
 	// Mailer
 	smtpHost := env.MustGetString("SMTP_HOST")

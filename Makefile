@@ -3,9 +3,9 @@ ROOT=$(realpath $(dir $(lastword $(MAKEFILE_LIST))))
 CGO_ENABLED?=0
 GO_CMD?=go
 
-APP_NAME?=blog
+APP_NAME?=fullstackgo
 
-IMAGE_REPOSITORY?=ghcr.io/nasermirzaei89/blog
+IMAGE_REPOSITORY?=ghcr.io/nasermirzaei89/fullstackgo
 IMAGE_TAG?=latest
 
 # Install by `go get -tool github.com/golangci/golangci-lint/v2/cmd/golangci-lint@<SET VERSION>`

@@ -7,7 +7,7 @@ import (
 	"log/slog"
 
 	"github.com/Masterminds/squirrel"
-	"github.com/nasermirzaei89/blog/web"
+	"github.com/nasermirzaei89/fullstackgo/web"
 )
 
 type PostRepo struct {

@@ -6,8 +6,8 @@ import (
 	"os"
 
 	"github.com/MatusOllah/slogcolor"
-	"github.com/nasermirzaei89/blog"
 	"github.com/nasermirzaei89/env"
+	"github.com/nasermirzaei89/fullstackgo"
 )
 
 func main() {
@@ -17,7 +17,7 @@ func main() {
 
 	slog.Info("starting app...")
 
-	err := blog.Run(context.Background())
+	err := fullstackgo.Run(context.Background())
 	if err != nil {
 		slog.Error("failed to run application", "error", err)
 		os.Exit(1)

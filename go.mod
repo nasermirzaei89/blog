@@ -1,4 +1,4 @@
-module github.com/nasermirzaei89/blog
+module github.com/nasermirzaei89/fullstackgo
 
 go 1.25.1
 

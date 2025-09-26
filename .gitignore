@@ -2,6 +2,7 @@ bin/*
 tmp/
 
 .env
-blog.db
+
+*.sqlite3
 
 coverage.out

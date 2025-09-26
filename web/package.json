@@ -1,5 +1,5 @@
 {
-  "name": "blog",
+  "name": "fullstackgo-web",
   "private": true,
   "scripts": {
     "build:js": "esbuild --log-level=warning --bundle --minify --sourcemap --outfile=static/scripts.min.js --loader:.woff=file --loader:.woff2=file --asset-names=fonts/[name] assets/scripts.js",
