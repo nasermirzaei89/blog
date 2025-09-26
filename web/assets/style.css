@@ -162,6 +162,11 @@ footer {
 
     .wysiwyg-editor-content {
         @apply prose dark:prose-invert max-w-none min-h-32 px-4 focus:outline-none focus:ring-0;
+
+        .ProseMirror-selectednode {
+            @apply outline-2 outline-gray-300;
+            @apply dark:outline-gray-700;
+        }
     }
 }
 
