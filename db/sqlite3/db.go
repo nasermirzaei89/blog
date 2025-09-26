@@ -13,8 +13,6 @@ import (
 	"github.com/golang-migrate/migrate/v4/source/iofs"
 )
 
-var ErrNoRowsAffected = errors.New("no rows affected")
-
 //go:embed migrations/*.sql
 var migrations embed.FS
 

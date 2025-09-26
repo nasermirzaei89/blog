@@ -1,7 +1,8 @@
-package web
+package blog
 
 import (
 	"context"
+	"fmt"
 	"time"
 )
 
@@ -30,4 +31,20 @@ type PostRepository interface {
 	Create(ctx context.Context, post *Post) (err error)
 	Update(ctx context.Context, post *Post) (err error)
 	Delete(ctx context.Context, id string) (err error)
+}
+
+type PostBySlugNotFoundError struct {
+	Slug string
+}
+
+func (err PostBySlugNotFoundError) Error() string {
+	return fmt.Sprintf("post with slug %q not found", err.Slug)
+}
+
+type PostByIDNotFoundError struct {
+	ID string
+}
+
+func (err PostByIDNotFoundError) Error() string {
+	return fmt.Sprintf("post with ID %q not found", err.ID)
 }

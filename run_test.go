@@ -9,6 +9,8 @@ import (
 
 	"github.com/gorilla/sessions"
 	"github.com/microcosm-cc/bluemonday"
+	"github.com/nasermirzaei89/fullstackgo/auth"
+	"github.com/nasermirzaei89/fullstackgo/blog"
 	"github.com/nasermirzaei89/fullstackgo/db/sqlite3"
 	"github.com/nasermirzaei89/fullstackgo/mailer"
 	"github.com/nasermirzaei89/fullstackgo/web"
@@ -258,7 +260,7 @@ func runServer(t *testing.T) *httptest.Server {
 	sessionName := "fullstackgo-test"
 
 	// Database
-	dbDSN := ":memory:"
+	dbDSN := "file::memory:?cache=shared"
 
 	db, err := sql.Open("sqlite3", dbDSN)
 	if err != nil {
@@ -280,20 +282,29 @@ func runServer(t *testing.T) *httptest.Server {
 	commentRepo := &sqlite3.CommentRepo{DB: db}
 	passwordResetTokenRepo := &sqlite3.PasswordResetTokenRepo{DB: db}
 
+	// Services
+	authSvc := &auth.Service{
+		UserRepo:               userRepo,
+		PasswordResetTokenRepo: passwordResetTokenRepo,
+	}
+
+	blogSvc := &blog.Service{
+		PostRepo:    postRepo,
+		CommentRepo: commentRepo,
+		HTMLPolicy:  bluemonday.UGCPolicy(),
+		TextPolicy:  bluemonday.StrictPolicy(),
+	}
+
 	mockMailer := &mailer.MockMailer{}
 
 	handler := &web.Handler{
-		CookieStore:            cookieStore,
-		SessionName:            sessionName,
-		UserRepo:               userRepo,
-		PostRepo:               postRepo,
-		CommentRepo:            commentRepo,
-		PasswordResetTokenRepo: passwordResetTokenRepo,
-		Mailer:                 mockMailer,
-		HTMLPolicy:             bluemonday.UGCPolicy(),
-		TextPolicy:             bluemonday.StrictPolicy(),
-		CSRFAuthKeys:           []byte("test-csrf-auth-key"),
-		CSRFTrustedOrigins:     []string{},
+		CookieStore:        cookieStore,
+		SessionName:        sessionName,
+		AuthSvc:            authSvc,
+		BlogSvc:            blogSvc,
+		Mailer:             mockMailer,
+		CSRFAuthKeys:       []byte("test-csrf-auth-key"),
+		CSRFTrustedOrigins: []string{},
 	}
 
 	server := httptest.NewServer(handler)

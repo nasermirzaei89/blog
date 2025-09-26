@@ -1,7 +1,8 @@
-package web
+package blog
 
 import (
 	"context"
+	"fmt"
 	"time"
 )
 
@@ -27,4 +28,12 @@ type CommentRepository interface {
 	GetByID(ctx context.Context, id string) (comment *Comment, err error)
 	Update(ctx context.Context, comment *Comment) (err error)
 	Delete(ctx context.Context, id string) (err error)
+}
+
+type CommentByIDNotFoundError struct {
+	ID string
+}
+
+func (err CommentByIDNotFoundError) Error() string {
+	return fmt.Sprintf("comment with ID %q not found", err.ID)
 }

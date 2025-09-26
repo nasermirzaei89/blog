@@ -13,7 +13,6 @@ import (
 	"net/http"
 	"runtime/debug"
 	"strconv"
-	"strings"
 	"sync/atomic"
 	"time"
 
@@ -21,8 +20,8 @@ import (
 	"github.com/google/uuid"
 	"github.com/gorilla/csrf"
 	"github.com/gorilla/sessions"
-	slugify "github.com/gosimple/slug"
-	"github.com/microcosm-cc/bluemonday"
+	"github.com/nasermirzaei89/fullstackgo/auth"
+	"github.com/nasermirzaei89/fullstackgo/blog"
 	"github.com/nasermirzaei89/fullstackgo/mailer"
 	"golang.org/x/crypto/bcrypt"
 )
@@ -36,21 +35,17 @@ var (
 )
 
 type Handler struct {
-	handler                http.Handler
-	static                 fs.FS
-	CookieStore            *sessions.CookieStore
-	SessionName            string
-	template               *template.Template
-	UserRepo               UserRepository
-	PostRepo               PostRepository
-	CommentRepo            CommentRepository
-	PasswordResetTokenRepo PasswordResetTokenRepository
-	Mailer                 mailer.Mailer
-	HTMLPolicy             *bluemonday.Policy
-	TextPolicy             *bluemonday.Policy
-	CSRFAuthKeys           []byte
-	CSRFTrustedOrigins     []string
-	isShuttingDown         atomic.Bool
+	handler            http.Handler
+	static             fs.FS
+	CookieStore        *sessions.CookieStore
+	SessionName        string
+	template           *template.Template
+	AuthSvc            *auth.Service
+	BlogSvc            *blog.Service
+	Mailer             mailer.Mailer
+	CSRFAuthKeys       []byte
+	CSRFTrustedOrigins []string
+	isShuttingDown     atomic.Bool
 }
 
 type contextKeyUserType struct{}
@@ -281,9 +276,9 @@ func (h *Handler) AuthMiddleware() func(http.Handler) http.Handler {
 			}
 
 			if username != nil && username.(string) != "" {
-				user, err := h.UserRepo.GetByUsername(r.Context(), username.(string))
+				user, err := h.AuthSvc.GetUserByUsername(r.Context(), username.(string))
 				if err != nil {
-					if errors.As(err, &UserByUsernameNotFoundError{}) {
+					if errors.As(err, &auth.UserByUsernameNotFoundError{}) {
 						err = h.deleteSessionValue(w, r, "username")
 						if err != nil {
 							slog.ErrorContext(
@@ -322,8 +317,8 @@ func (h *Handler) AuthMiddleware() func(http.Handler) http.Handler {
 	}
 }
 
-func userFromContext(ctx context.Context) *User {
-	user, ok := ctx.Value(contextKeyUser).(*User)
+func userFromContext(ctx context.Context) *auth.User {
+	user, ok := ctx.Value(contextKeyUser).(*auth.User)
 	if !ok {
 		return nil
 	}
@@ -488,7 +483,7 @@ func (h *Handler) HandleHealthz(w http.ResponseWriter, r *http.Request) {
 }
 
 func (h *Handler) HandleHomePage(w http.ResponseWriter, r *http.Request) {
-	listPostsParams := ListPostsParams{
+	listPostsParams := blog.ListPostsParams{
 		Limit:  10,
 		Offset: 0,
 	}
@@ -517,7 +512,7 @@ func (h *Handler) HandleHomePage(w http.ResponseWriter, r *http.Request) {
 		listPostsParams.Offset = (pageNum - 1) * listPostsParams.Limit
 	}
 
-	posts, err := h.PostRepo.List(r.Context(), listPostsParams)
+	posts, err := h.BlogSvc.ListPosts(r.Context(), listPostsParams)
 	if err != nil {
 		slog.ErrorContext(r.Context(), "failed to list posts", "error", err)
 		http.Error(w, "failed to list posts", http.StatusInternalServerError)
@@ -525,7 +520,7 @@ func (h *Handler) HandleHomePage(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	totalPosts, err := h.PostRepo.Count(r.Context())
+	totalPosts, err := h.BlogSvc.CountPosts(r.Context())
 	if err != nil {
 		slog.ErrorContext(r.Context(), "failed to count posts", "error", err)
 		http.Error(w, "failed to count posts", http.StatusInternalServerError)
@@ -569,9 +564,9 @@ func (h *Handler) HandleLogin() http.Handler {
 		username := r.FormValue("username")
 		password := r.FormValue("password")
 
-		user, err := h.UserRepo.GetByUsername(r.Context(), username)
+		user, err := h.AuthSvc.GetUserByUsername(r.Context(), username)
 		if err != nil {
-			if errors.As(err, &UserByUsernameNotFoundError{}) {
+			if errors.As(err, &auth.UserByUsernameNotFoundError{}) {
 				h.addErrorMessage(w, r, "Invalid username or password.")
 				w.WriteHeader(http.StatusUnauthorized)
 				h.HandleLoginPage().ServeHTTP(w, r)
@@ -651,7 +646,7 @@ func (h *Handler) HandleRegister() http.Handler {
 		}
 
 		// FIXME: what to do on security?
-		usernameExists, err := h.UserRepo.ExistsByUsername(r.Context(), username)
+		usernameExists, err := h.AuthSvc.UserExistsByUsername(r.Context(), username)
 		if err != nil {
 			slog.ErrorContext(
 				r.Context(),
@@ -673,7 +668,7 @@ func (h *Handler) HandleRegister() http.Handler {
 		}
 
 		// FIXME: what to do on security?
-		emailAddressExists, err := h.UserRepo.ExistsByEmailAddress(r.Context(), emailAddress)
+		emailAddressExists, err := h.AuthSvc.UserExistsByEmailAddress(r.Context(), emailAddress)
 		if err != nil {
 			slog.ErrorContext(
 				r.Context(),
@@ -704,7 +699,7 @@ func (h *Handler) HandleRegister() http.Handler {
 
 		timeNow := time.Now()
 
-		user := &User{
+		user := &auth.User{
 			ID:           uuid.NewString(),
 			Username:     username,
 			EmailAddress: emailAddress,
@@ -715,7 +710,7 @@ func (h *Handler) HandleRegister() http.Handler {
 			UpdatedAt:    timeNow,
 		}
 
-		err = h.UserRepo.Create(r.Context(), user)
+		err = h.AuthSvc.CreateUser(r.Context(), user)
 		if err != nil {
 			slog.ErrorContext(r.Context(), "error on create user", "error", err)
 			http.Error(w, "error on create user", http.StatusInternalServerError)
@@ -810,9 +805,9 @@ func (h *Handler) HandleForgotPassword() http.Handler {
 			return
 		}
 
-		user, err := h.UserRepo.GetByEmailAddress(r.Context(), emailAddress)
+		user, err := h.AuthSvc.GetUserByEmailAddress(r.Context(), emailAddress)
 		if err != nil {
-			if errors.As(err, &UserByEmailNotFoundError{}) {
+			if errors.As(err, &auth.UserByEmailNotFoundError{}) {
 				// Do not reveal if email exists for security
 				http.Redirect(w, r, "/", http.StatusSeeOther)
 
@@ -828,14 +823,14 @@ func (h *Handler) HandleForgotPassword() http.Handler {
 		resetToken := uuid.NewString()
 		resetTokenExpiry := time.Now().Add(1 * time.Hour)
 
-		reset := &PasswordResetToken{
+		reset := &auth.PasswordResetToken{
 			ID:        uuid.NewString(),
 			UserID:    user.ID,
 			Token:     resetToken,
 			ExpiresAt: resetTokenExpiry,
 		}
 
-		err = h.PasswordResetTokenRepo.Create(r.Context(), reset)
+		err = h.AuthSvc.CreatePasswordResetToken(r.Context(), reset)
 		if err != nil {
 			slog.ErrorContext(r.Context(), "error saving reset token", "error", err)
 			http.Error(w, "error saving reset token", http.StatusInternalServerError)
@@ -912,7 +907,7 @@ func (h *Handler) HandleResetPassword() http.Handler {
 			return
 		}
 
-		resetToken, err := h.PasswordResetTokenRepo.GetByToken(r.Context(), token)
+		resetToken, err := h.AuthSvc.GetPasswordResetTokenByToken(r.Context(), token)
 		if err != nil {
 			slog.ErrorContext(r.Context(), "invalid or expired reset token", "error", err)
 			http.Error(w, "invalid or expired reset token", http.StatusBadRequest)
@@ -926,7 +921,7 @@ func (h *Handler) HandleResetPassword() http.Handler {
 			return
 		}
 
-		user, err := h.UserRepo.GetByID(r.Context(), resetToken.UserID)
+		user, err := h.AuthSvc.GetUserByID(r.Context(), resetToken.UserID)
 		if err != nil {
 			slog.ErrorContext(r.Context(), "user not found for reset token", "error", err)
 			http.Error(w, "user not found", http.StatusInternalServerError)
@@ -960,7 +955,7 @@ func (h *Handler) HandleResetPassword() http.Handler {
 		user.PasswordHash = string(newPasswordHash)
 		user.UpdatedAt = time.Now()
 
-		err = h.UserRepo.Update(r.Context(), user)
+		err = h.AuthSvc.UpdateUser(r.Context(), user)
 		if err != nil {
 			slog.ErrorContext(r.Context(), "error updating user password", "error", err)
 			http.Error(w, "error updating password", http.StatusInternalServerError)
@@ -968,7 +963,7 @@ func (h *Handler) HandleResetPassword() http.Handler {
 			return
 		}
 
-		err = h.PasswordResetTokenRepo.Delete(r.Context(), resetToken.ID)
+		err = h.AuthSvc.DeletePasswordResetToken(r.Context(), resetToken.ID)
 		if err != nil {
 			slog.ErrorContext(r.Context(), "error deleting used reset token", "error", err)
 		}
@@ -1012,7 +1007,7 @@ func (h *Handler) HandleProfileUpdate() http.Handler {
 		user.EmailAddress = emailAddress
 		user.AvatarURL = avatarURL
 
-		err = h.UserRepo.Update(r.Context(), user)
+		err = h.AuthSvc.UpdateUser(r.Context(), user)
 		if err != nil {
 			slog.ErrorContext(r.Context(), "error on update user", "error", err)
 			http.Error(w, "error on update user", http.StatusInternalServerError)
@@ -1090,7 +1085,7 @@ func (h *Handler) HandleProfilePasswordUpdate() http.Handler {
 
 		user.PasswordHash = string(newPasswordHash)
 
-		err = h.UserRepo.Update(r.Context(), user)
+		err = h.AuthSvc.UpdateUser(r.Context(), user)
 		if err != nil {
 			slog.ErrorContext(r.Context(), "error on update user", "error", err)
 			h.addErrorMessage(w, r, "Error on update user.")
@@ -1110,17 +1105,23 @@ func (h *Handler) HandleViewPostPage() http.Handler {
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		postSlug := r.PathValue("postSlug")
 
-		post, err := h.PostRepo.GetBySlug(r.Context(), postSlug)
+		post, err := h.BlogSvc.GetPostBySlug(r.Context(), postSlug)
 		if err != nil {
-			slog.ErrorContext(r.Context(), "failed to list posts", "error", err)
-			http.Error(w, "failed to list posts", http.StatusInternalServerError)
+			if errors.As(err, &blog.PostBySlugNotFoundError{}) {
+				http.Error(w, "post not found", http.StatusNotFound)
+
+				return
+			}
+
+			slog.ErrorContext(r.Context(), "failed to get post by slug", "error", err)
+			http.Error(w, "failed to get post by slug", http.StatusInternalServerError)
 
 			return
 		}
 
-		comments, err := h.CommentRepo.List(r.Context(), ListCommentsParams{PostID: post.ID})
+		comments, err := h.BlogSvc.ListComments(r.Context(), blog.ListCommentsParams{PostID: post.ID})
 		if err != nil {
-			slog.ErrorContext(r.Context(), "failed to post comments", "error", err)
+			slog.ErrorContext(r.Context(), "failed to list post comments", "error", err)
 			http.Error(w, "failed to list post comments", http.StatusInternalServerError)
 
 			return
@@ -1163,44 +1164,17 @@ func (h *Handler) HandleCreatePost() http.Handler {
 		excerpt := r.FormValue("excerpt")
 		content := r.FormValue("content")
 
-		if slug == "" {
-			slug = title
-		}
-
-		slug = slugify.Make(slug)
-
-		uniqueSlug, err := h.generateUniqueSlug(r.Context(), slug)
-		if err != nil {
-			slog.ErrorContext(r.Context(), "error generating unique slug", "error", err)
-			http.Error(w, "error generating unique slug", http.StatusInternalServerError)
-
-			return
-		}
-
-		if excerpt == "" {
-			excerpt = h.TextPolicy.Sanitize(content)
-		}
-
-		excerpt = h.generateExcerpt(excerpt, 160)
-
-		content = h.HTMLPolicy.Sanitize(content)
-
 		user := userFromContext(r.Context())
 
-		timeNow := time.Now()
-
-		post := &Post{
-			ID:        uuid.NewString(),
-			Title:     title,
-			Slug:      uniqueSlug,
-			Excerpt:   excerpt,
-			Content:   content,
-			AuthorID:  user.ID,
-			CreatedAt: timeNow,
-			UpdatedAt: timeNow,
+		req := &blog.CreatePostRequest{
+			Title:    title,
+			Slug:     slug,
+			Excerpt:  excerpt,
+			Content:  content,
+			AuthorID: user.ID,
 		}
 
-		err = h.PostRepo.Create(r.Context(), post)
+		post, err := h.BlogSvc.CreatePost(r.Context(), req)
 		if err != nil {
 			slog.ErrorContext(r.Context(), "error on create post", "error", err)
 			http.Error(w, "error on create post", http.StatusInternalServerError)
@@ -1219,16 +1193,15 @@ func (h *Handler) HandleEditPostPage() http.Handler {
 	hf := http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		postSlug := r.PathValue("postSlug")
 
-		post, err := h.PostRepo.GetBySlug(r.Context(), postSlug)
+		post, err := h.BlogSvc.GetPostBySlug(r.Context(), postSlug)
 		if err != nil {
-			slog.ErrorContext(
-				r.Context(),
-				"error on get post by slug",
-				"error",
-				err,
-				"postSlug",
-				postSlug,
-			)
+			if errors.As(err, &blog.PostBySlugNotFoundError{}) {
+				http.Error(w, "post not found", http.StatusNotFound)
+
+				return
+			}
+
+			slog.ErrorContext(r.Context(), "error on get post by slug", "error", err, "postSlug", postSlug)
 			http.Error(w, "error on get post by slug", http.StatusInternalServerError)
 
 			return
@@ -1257,8 +1230,14 @@ func (h *Handler) HandleEditPost() http.Handler {
 	hf := http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		postSlug := r.PathValue("postSlug")
 
-		post, err := h.PostRepo.GetBySlug(r.Context(), postSlug)
+		post, err := h.BlogSvc.GetPostBySlug(r.Context(), postSlug)
 		if err != nil {
+			if errors.As(err, &blog.PostBySlugNotFoundError{}) {
+				http.Error(w, "post not found", http.StatusNotFound)
+
+				return
+			}
+
 			slog.ErrorContext(
 				r.Context(),
 				"error on get post by slug",
@@ -1292,41 +1271,14 @@ func (h *Handler) HandleEditPost() http.Handler {
 		excerpt := r.FormValue("excerpt")
 		content := r.FormValue("content")
 
-		if slug == "" {
-			slug = title
+		req := &blog.UpdatePostRequest{
+			Title:   title,
+			Slug:    slug,
+			Excerpt: excerpt,
+			Content: content,
 		}
 
-		slug = slugify.Make(slug)
-
-		uniqueSlug := slug
-
-		if uniqueSlug != post.Slug {
-			var err error
-
-			uniqueSlug, err = h.generateUniqueSlug(r.Context(), slug)
-			if err != nil {
-				slog.ErrorContext(r.Context(), "error generating unique slug", "error", err)
-				http.Error(w, "error generating unique slug", http.StatusInternalServerError)
-
-				return
-			}
-		}
-
-		if excerpt == "" {
-			excerpt = h.TextPolicy.Sanitize(content)
-		}
-
-		excerpt = h.generateExcerpt(excerpt, 160)
-
-		content = h.HTMLPolicy.Sanitize(content)
-
-		post.Title = title
-		post.Slug = uniqueSlug
-		post.Excerpt = excerpt
-		post.Content = content
-		post.UpdatedAt = time.Now()
-
-		err = h.PostRepo.Update(r.Context(), post)
+		post, err = h.BlogSvc.UpdatePost(r.Context(), post.ID, req)
 		if err != nil {
 			slog.ErrorContext(r.Context(), "error on update post", "error", err)
 			http.Error(w, "error on update post", http.StatusInternalServerError)
@@ -1345,8 +1297,14 @@ func (h *Handler) HandleDeletePostPage() http.Handler {
 	hf := http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		postSlug := r.PathValue("postSlug")
 
-		post, err := h.PostRepo.GetBySlug(r.Context(), postSlug)
+		post, err := h.BlogSvc.GetPostBySlug(r.Context(), postSlug)
 		if err != nil {
+			if errors.As(err, &blog.PostBySlugNotFoundError{}) {
+				http.Error(w, "post not found", http.StatusNotFound)
+
+				return
+			}
+
 			slog.ErrorContext(
 				r.Context(),
 				"error on get post by slug",
@@ -1382,8 +1340,14 @@ func (h *Handler) HandleDeletePost() http.Handler {
 	hf := http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		postSlug := r.PathValue("postSlug")
 
-		post, err := h.PostRepo.GetBySlug(r.Context(), postSlug)
+		post, err := h.BlogSvc.GetPostBySlug(r.Context(), postSlug)
 		if err != nil {
+			if errors.As(err, &blog.PostBySlugNotFoundError{}) {
+				http.Error(w, "post not found", http.StatusNotFound)
+
+				return
+			}
+
 			slog.ErrorContext(
 				r.Context(),
 				"error on get post by slug",
@@ -1404,7 +1368,7 @@ func (h *Handler) HandleDeletePost() http.Handler {
 			return
 		}
 
-		err = h.PostRepo.Delete(r.Context(), post.ID)
+		err = h.BlogSvc.DeletePost(r.Context(), post.ID)
 		if err != nil {
 			slog.ErrorContext(r.Context(), "error on delete post", "error", err)
 			http.Error(w, "error on delete post", http.StatusInternalServerError)
@@ -1432,11 +1396,9 @@ func (h *Handler) HandleSubmitComment() http.Handler {
 		postID := r.FormValue("postId")
 		content := r.FormValue("content")
 
-		content = h.HTMLPolicy.Sanitize(content)
-
 		user := userFromContext(r.Context())
 
-		post, err := h.PostRepo.GetByID(r.Context(), postID)
+		post, err := h.BlogSvc.GetPostByID(r.Context(), postID)
 		if err != nil {
 			slog.ErrorContext(
 				r.Context(),
@@ -1451,18 +1413,13 @@ func (h *Handler) HandleSubmitComment() http.Handler {
 			return
 		}
 
-		timeNow := time.Now()
-
-		comment := &Comment{
-			ID:        uuid.NewString(),
-			PostID:    postID,
-			UserID:    user.ID,
-			Content:   content,
-			CreatedAt: timeNow,
-			UpdatedAt: timeNow,
+		req := &blog.CreateCommentRequest{
+			PostID:  postID,
+			UserID:  user.ID,
+			Content: content,
 		}
 
-		err = h.CommentRepo.Create(r.Context(), comment)
+		_, err = h.BlogSvc.CreateComment(r.Context(), req)
 		if err != nil {
 			slog.ErrorContext(r.Context(), "error on create comment", "error", err)
 			http.Error(w, "error on create comment", http.StatusInternalServerError)
@@ -1481,7 +1438,7 @@ func (h *Handler) HandleEditCommentPage() http.Handler {
 	hf := http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		commentID := r.PathValue("commentId")
 
-		comment, err := h.CommentRepo.GetByID(r.Context(), commentID)
+		comment, err := h.BlogSvc.GetCommentByID(r.Context(), commentID)
 		if err != nil {
 			slog.ErrorContext(
 				r.Context(),
@@ -1504,7 +1461,7 @@ func (h *Handler) HandleEditCommentPage() http.Handler {
 			return
 		}
 
-		post, err := h.PostRepo.GetByID(r.Context(), comment.PostID)
+		post, err := h.BlogSvc.GetPostByID(r.Context(), comment.PostID)
 		if err != nil {
 			slog.ErrorContext(
 				r.Context(),
@@ -1545,9 +1502,7 @@ func (h *Handler) HandleEditComment() http.Handler {
 
 		content := r.FormValue("content")
 
-		content = h.HTMLPolicy.Sanitize(content)
-
-		comment, err := h.CommentRepo.GetByID(r.Context(), commentID)
+		comment, err := h.BlogSvc.GetCommentByID(r.Context(), commentID)
 		if err != nil {
 			slog.ErrorContext(
 				r.Context(),
@@ -1562,28 +1517,7 @@ func (h *Handler) HandleEditComment() http.Handler {
 			return
 		}
 
-		user := userFromContext(r.Context())
-
-		if comment.UserID != user.ID {
-			http.Error(w, "cannot edit comment", http.StatusForbidden)
-
-			return
-		}
-
-		comment.Content = content
-		comment.UpdatedAt = time.Now()
-
-		err = h.CommentRepo.Update(r.Context(), comment)
-		if err != nil {
-			slog.ErrorContext(r.Context(), "error on update comment", "error", err)
-			http.Error(w, "error on update comment", http.StatusInternalServerError)
-
-			return
-		}
-
-		h.addSuccessMessage(w, r, "Comment has been updated successfully.")
-
-		post, err := h.PostRepo.GetByID(r.Context(), comment.PostID)
+		post, err := h.BlogSvc.GetPostByID(r.Context(), comment.PostID)
 		if err != nil {
 			slog.ErrorContext(
 				r.Context(),
@@ -1598,6 +1532,28 @@ func (h *Handler) HandleEditComment() http.Handler {
 			return
 		}
 
+		user := userFromContext(r.Context())
+
+		if comment.UserID != user.ID {
+			http.Error(w, "cannot edit comment", http.StatusForbidden)
+
+			return
+		}
+
+		req := &blog.UpdateCommentRequest{
+			Content: content,
+		}
+
+		err = h.BlogSvc.UpdateComment(r.Context(), commentID, req)
+		if err != nil {
+			slog.ErrorContext(r.Context(), "error on update comment", "error", err)
+			http.Error(w, "error on update comment", http.StatusInternalServerError)
+
+			return
+		}
+
+		h.addSuccessMessage(w, r, "Comment has been updated successfully.")
+
 		http.Redirect(w, r, "/posts/"+post.Slug, http.StatusSeeOther)
 	})
 
@@ -1608,7 +1564,7 @@ func (h *Handler) HandleDeleteCommentPage() http.Handler {
 	hf := http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		commentID := r.PathValue("commentId")
 
-		comment, err := h.CommentRepo.GetByID(r.Context(), commentID)
+		comment, err := h.BlogSvc.GetCommentByID(r.Context(), commentID)
 		if err != nil {
 			slog.ErrorContext(
 				r.Context(),
@@ -1631,7 +1587,7 @@ func (h *Handler) HandleDeleteCommentPage() http.Handler {
 			return
 		}
 
-		post, err := h.PostRepo.GetByID(r.Context(), comment.PostID)
+		post, err := h.BlogSvc.GetPostByID(r.Context(), comment.PostID)
 		if err != nil {
 			slog.ErrorContext(
 				r.Context(),
@@ -1662,7 +1618,7 @@ func (h *Handler) HandleDeleteComment() http.Handler {
 	hf := http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		commentID := r.PathValue("commentId")
 
-		comment, err := h.CommentRepo.GetByID(r.Context(), commentID)
+		comment, err := h.BlogSvc.GetCommentByID(r.Context(), commentID)
 		if err != nil {
 			slog.ErrorContext(
 				r.Context(),
@@ -1685,7 +1641,7 @@ func (h *Handler) HandleDeleteComment() http.Handler {
 			return
 		}
 
-		err = h.CommentRepo.Delete(r.Context(), commentID)
+		err = h.BlogSvc.DeleteComment(r.Context(), commentID)
 		if err != nil {
 			slog.ErrorContext(r.Context(), "error on delete comment", "error", err)
 			http.Error(w, "error on delete comment", http.StatusInternalServerError)
@@ -1695,7 +1651,7 @@ func (h *Handler) HandleDeleteComment() http.Handler {
 
 		h.addSuccessMessage(w, r, "Comment has been deleted successfully.")
 
-		post, err := h.PostRepo.GetByID(r.Context(), comment.PostID)
+		post, err := h.BlogSvc.GetPostByID(r.Context(), comment.PostID)
 		if err != nil {
 			slog.ErrorContext(
 				r.Context(),
@@ -1714,67 +1670,4 @@ func (h *Handler) HandleDeleteComment() http.Handler {
 	})
 
 	return h.AuthenticatedOnly(hf)
-}
-
-// generateExcerpt creates a properly sized excerpt from content.
-func (h *Handler) generateExcerpt(content string, maxLength int) string {
-	if len(content) <= maxLength {
-		return content
-	}
-
-	// Find the last complete word within the limit
-	excerpt := content[:maxLength]
-	lastSpace := strings.LastIndex(excerpt, " ")
-
-	if lastSpace > 0 {
-		excerpt = excerpt[:lastSpace]
-	}
-
-	return excerpt + "..."
-}
-
-var ErrUnableToGenerateUniqueSlug = errors.New("unable to generate unique slug after 1000 attempts")
-
-func (h *Handler) generateUniqueSlug(ctx context.Context, baseSlug string) (string, error) {
-	exists, err := h.PostRepo.SlugExists(ctx, baseSlug)
-	if err != nil {
-		return "", fmt.Errorf("error checking slug existence: %w", err)
-	}
-
-	if !exists {
-		return baseSlug, nil
-	}
-
-	basePart := baseSlug
-	counter := 2
-
-	parts := strings.Split(baseSlug, "-")
-	if len(parts) > 1 {
-		lastPart := parts[len(parts)-1]
-
-		num, err := strconv.Atoi(lastPart)
-		if err == nil {
-			basePart = strings.Join(parts[:len(parts)-1], "-")
-			counter = num + 1
-		}
-	}
-
-	for {
-		candidateSlug := basePart + "-" + strconv.Itoa(counter)
-
-		exists, err := h.PostRepo.SlugExists(ctx, candidateSlug)
-		if err != nil {
-			return "", fmt.Errorf("error checking slug existence: %w", err)
-		}
-
-		if !exists {
-			return candidateSlug, nil
-		}
-
-		counter++
-
-		if counter > 1000 {
-			return "", ErrUnableToGenerateUniqueSlug
-		}
-	}
 }

@@ -8,15 +8,15 @@ import (
 	"log/slog"
 
 	"github.com/Masterminds/squirrel"
-	"github.com/nasermirzaei89/fullstackgo/web"
+	"github.com/nasermirzaei89/fullstackgo/auth"
 )
 
 type UserRepo struct {
 	DB *sql.DB
 }
 
-func scanUser(rs squirrel.RowScanner) (*web.User, error) {
-	var user web.User
+func scanUser(rs squirrel.RowScanner) (*auth.User, error) {
+	var user auth.User
 
 	err := rs.Scan(
 		&user.ID,
@@ -35,7 +35,7 @@ func scanUser(rs squirrel.RowScanner) (*web.User, error) {
 	return &user, nil
 }
 
-func (repo *UserRepo) GetByUsername(ctx context.Context, username string) (*web.User, error) {
+func (repo *UserRepo) GetByUsername(ctx context.Context, username string) (*auth.User, error) {
 	q := squirrel.Select("*").From("users").Where(squirrel.Eq{"username": username})
 
 	q = q.RunWith(repo.DB)
@@ -43,7 +43,7 @@ func (repo *UserRepo) GetByUsername(ctx context.Context, username string) (*web.
 	user, err := scanUser(q.QueryRowContext(ctx))
 	if err != nil {
 		if errors.Is(err, sql.ErrNoRows) {
-			return nil, web.UserByUsernameNotFoundError{Username: username}
+			return nil, auth.UserByUsernameNotFoundError{Username: username}
 		}
 
 		return nil, fmt.Errorf("error on scan user: %w", err)
@@ -55,14 +55,14 @@ func (repo *UserRepo) GetByUsername(ctx context.Context, username string) (*web.
 func (repo *UserRepo) GetByEmailAddress(
 	ctx context.Context,
 	emailAddress string,
-) (*web.User, error) {
+) (*auth.User, error) {
 	q := squirrel.Select("*").From("users").Where(squirrel.Eq{"email_address": emailAddress})
 	q = q.RunWith(repo.DB)
 
 	user, err := scanUser(q.QueryRowContext(ctx))
 	if err != nil {
 		if errors.Is(err, sql.ErrNoRows) {
-			return nil, web.UserByEmailNotFoundError{EmailAddress: emailAddress}
+			return nil, auth.UserByEmailNotFoundError{EmailAddress: emailAddress}
 		}
 
 		return nil, fmt.Errorf("error on scan user: %w", err)
@@ -71,14 +71,14 @@ func (repo *UserRepo) GetByEmailAddress(
 	return user, nil
 }
 
-func (repo *UserRepo) GetByID(ctx context.Context, id string) (*web.User, error) {
+func (repo *UserRepo) GetByID(ctx context.Context, id string) (*auth.User, error) {
 	q := squirrel.Select("*").From("users").Where(squirrel.Eq{"id": id})
 	q = q.RunWith(repo.DB)
 
 	user, err := scanUser(q.QueryRowContext(ctx))
 	if err != nil {
 		if errors.Is(err, sql.ErrNoRows) {
-			return nil, web.UserByIDNotFoundError{ID: id}
+			return nil, auth.UserByIDNotFoundError{ID: id}
 		}
 
 		return nil, fmt.Errorf("error on scan user: %w", err)
@@ -87,7 +87,7 @@ func (repo *UserRepo) GetByID(ctx context.Context, id string) (*web.User, error)
 	return user, nil
 }
 
-func (repo *UserRepo) List(ctx context.Context, params web.ListUsersParams) ([]*web.User, error) {
+func (repo *UserRepo) List(ctx context.Context, params auth.ListUsersParams) ([]*auth.User, error) {
 	q := squirrel.Select("*").From("users")
 
 	if params.Username != "" {
@@ -112,7 +112,7 @@ func (repo *UserRepo) List(ctx context.Context, params web.ListUsersParams) ([]*
 		}
 	}()
 
-	var users []*web.User
+	var users []*auth.User
 
 	for rows.Next() {
 		user, err := scanUser(rows)
@@ -172,7 +172,7 @@ func (repo *UserRepo) ExistsByEmailAddress(
 	return true, nil
 }
 
-func (repo *UserRepo) Create(ctx context.Context, user *web.User) error {
+func (repo *UserRepo) Create(ctx context.Context, user *auth.User) error {
 	q := squirrel.Insert("users").
 		Columns("id", "username", "email_address", "password_hash", "name", "avatar_url", "created_at", "updated_at").
 		Values(user.ID, user.Username, user.EmailAddress, user.PasswordHash, user.Name, user.AvatarURL, user.CreatedAt, user.UpdatedAt)
@@ -187,7 +187,7 @@ func (repo *UserRepo) Create(ctx context.Context, user *web.User) error {
 	return nil
 }
 
-func (repo *UserRepo) Update(ctx context.Context, user *web.User) error {
+func (repo *UserRepo) Update(ctx context.Context, user *auth.User) error {
 	q := squirrel.Update("users").
 		Set("username", user.Username).
 		Set("email_address", user.EmailAddress).

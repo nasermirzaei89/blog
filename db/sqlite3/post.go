@@ -3,18 +3,19 @@ package sqlite3
 import (
 	"context"
 	"database/sql"
+	"errors"
 	"fmt"
 	"log/slog"
 
 	"github.com/Masterminds/squirrel"
-	"github.com/nasermirzaei89/fullstackgo/web"
+	"github.com/nasermirzaei89/fullstackgo/blog"
 )
 
 type PostRepo struct {
 	DB *sql.DB
 }
 
-func (repo *PostRepo) List(ctx context.Context, params web.ListPostsParams) ([]*web.Post, error) {
+func (repo *PostRepo) List(ctx context.Context, params blog.ListPostsParams) ([]*blog.Post, error) {
 	q := squirrel.Select("*").From("posts").OrderBy("created_at DESC")
 
 	if params.Limit > 0 {
@@ -39,7 +40,7 @@ func (repo *PostRepo) List(ctx context.Context, params web.ListPostsParams) ([]*
 		}
 	}()
 
-	var posts []*web.Post
+	var posts []*blog.Post
 
 	for rows.Next() {
 		post, err := scanPost(rows)
@@ -72,26 +73,34 @@ func (repo *PostRepo) Count(ctx context.Context) (int, error) {
 	return count, nil
 }
 
-func (repo *PostRepo) GetBySlug(ctx context.Context, slug string) (*web.Post, error) {
+func (repo *PostRepo) GetBySlug(ctx context.Context, slug string) (*blog.Post, error) {
 	q := squirrel.Select("*").From("posts").Where(squirrel.Eq{"slug": slug})
 
 	q = q.RunWith(repo.DB)
 
 	post, err := scanPost(q.QueryRowContext(ctx))
 	if err != nil {
+		if errors.Is(err, sql.ErrNoRows) {
+			return nil, blog.PostBySlugNotFoundError{Slug: slug}
+		}
+
 		return nil, fmt.Errorf("error on scan post: %w", err)
 	}
 
 	return post, nil
 }
 
-func (repo *PostRepo) GetByID(ctx context.Context, id string) (*web.Post, error) {
+func (repo *PostRepo) GetByID(ctx context.Context, id string) (*blog.Post, error) {
 	q := squirrel.Select("*").From("posts").Where(squirrel.Eq{"id": id})
 
 	q = q.RunWith(repo.DB)
 
 	post, err := scanPost(q.QueryRowContext(ctx))
 	if err != nil {
+		if errors.Is(err, sql.ErrNoRows) {
+			return nil, blog.PostByIDNotFoundError{ID: id}
+		}
+
 		return nil, fmt.Errorf("error on scan post: %w", err)
 	}
 
@@ -113,8 +122,8 @@ func (repo *PostRepo) SlugExists(ctx context.Context, slug string) (bool, error)
 	return count > 0, nil
 }
 
-func scanPost(rs squirrel.RowScanner) (*web.Post, error) {
-	var post web.Post
+func scanPost(rs squirrel.RowScanner) (*blog.Post, error) {
+	var post blog.Post
 
 	err := rs.Scan(
 		&post.ID,
@@ -133,31 +142,22 @@ func scanPost(rs squirrel.RowScanner) (*web.Post, error) {
 	return &post, nil
 }
 
-func (repo *PostRepo) Create(ctx context.Context, post *web.Post) error {
+func (repo *PostRepo) Create(ctx context.Context, post *blog.Post) error {
 	q := squirrel.Insert("posts").
 		Columns("id", "title", "slug", "excerpt", "content", "author_id", "created_at", "updated_at").
 		Values(post.ID, post.Title, post.Slug, post.Excerpt, post.Content, post.AuthorID, post.CreatedAt, post.UpdatedAt)
 
 	q = q.RunWith(repo.DB)
 
-	result, err := q.ExecContext(ctx)
+	_, err := q.ExecContext(ctx)
 	if err != nil {
 		return fmt.Errorf("error on exec insert: %w", err)
-	}
-
-	rowsAffected, err := result.RowsAffected()
-	if err != nil {
-		return fmt.Errorf("error on get rows affected: %w", err)
-	}
-
-	if rowsAffected == 0 {
-		return ErrNoRowsAffected
 	}
 
 	return nil
 }
 
-func (repo *PostRepo) Update(ctx context.Context, post *web.Post) error {
+func (repo *PostRepo) Update(ctx context.Context, post *blog.Post) error {
 	q := squirrel.Update("posts").
 		Set("title", post.Title).
 		Set("slug", post.Slug).
@@ -180,7 +180,7 @@ func (repo *PostRepo) Update(ctx context.Context, post *web.Post) error {
 	}
 
 	if rowsAffected == 0 {
-		return ErrNoRowsAffected
+		return blog.PostByIDNotFoundError{ID: post.ID}
 	}
 
 	return nil
@@ -202,7 +202,7 @@ func (repo *PostRepo) Delete(ctx context.Context, id string) error {
 	}
 
 	if rowsAffected == 0 {
-		return ErrNoRowsAffected
+		return blog.PostByIDNotFoundError{ID: id}
 	}
 
 	return nil

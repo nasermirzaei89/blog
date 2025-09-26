@@ -16,6 +16,8 @@ import (
 	_ "github.com/mattn/go-sqlite3"
 	"github.com/microcosm-cc/bluemonday"
 	"github.com/nasermirzaei89/env"
+	"github.com/nasermirzaei89/fullstackgo/auth"
+	"github.com/nasermirzaei89/fullstackgo/blog"
 	"github.com/nasermirzaei89/fullstackgo/db/sqlite3"
 	"github.com/nasermirzaei89/fullstackgo/mailer"
 	"github.com/nasermirzaei89/fullstackgo/web"
@@ -52,6 +54,19 @@ func Run(ctx context.Context) error {
 	commentRepo := &sqlite3.CommentRepo{DB: db}
 	passwordResetTokenRepo := &sqlite3.PasswordResetTokenRepo{DB: db}
 
+	// Services
+	authSvc := &auth.Service{
+		UserRepo:               userRepo,
+		PasswordResetTokenRepo: passwordResetTokenRepo,
+	}
+
+	blogSvc := &blog.Service{
+		PostRepo:    postRepo,
+		CommentRepo: commentRepo,
+		HTMLPolicy:  bluemonday.UGCPolicy(),
+		TextPolicy:  bluemonday.StrictPolicy(),
+	}
+
 	// Session
 	cookieStore := sessions.NewCookieStore([]byte(env.MustGetString("SESSION_KEY")))
 	sessionName := env.GetString("SESSION_NAME", "fullstackgo")
@@ -70,17 +85,13 @@ func Run(ctx context.Context) error {
 
 	// HTTP Handler
 	handler := &web.Handler{
-		CookieStore:            cookieStore,
-		SessionName:            sessionName,
-		UserRepo:               userRepo,
-		PostRepo:               postRepo,
-		CommentRepo:            commentRepo,
-		PasswordResetTokenRepo: passwordResetTokenRepo,
-		Mailer:                 smtpMailer,
-		HTMLPolicy:             bluemonday.UGCPolicy(),
-		TextPolicy:             bluemonday.StrictPolicy(),
-		CSRFAuthKeys:           []byte(env.MustGetString("CSRF_AUTH_KEY")),
-		CSRFTrustedOrigins:     env.GetStringSlice("CSRF_TRUSTED_ORIGINS", []string{}),
+		CookieStore:        cookieStore,
+		SessionName:        sessionName,
+		AuthSvc:            authSvc,
+		BlogSvc:            blogSvc,
+		Mailer:             smtpMailer,
+		CSRFAuthKeys:       []byte(env.MustGetString("CSRF_AUTH_KEY")),
+		CSRFTrustedOrigins: env.GetStringSlice("CSRF_TRUSTED_ORIGINS", []string{}),
 	}
 
 	// HTTP Server

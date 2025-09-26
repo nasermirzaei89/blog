@@ -7,14 +7,14 @@ import (
 	"log/slog"
 
 	"github.com/Masterminds/squirrel"
-	"github.com/nasermirzaei89/fullstackgo/web"
+	"github.com/nasermirzaei89/fullstackgo/blog"
 )
 
 type CommentRepo struct {
 	DB *sql.DB
 }
 
-func (repo *CommentRepo) Create(ctx context.Context, comment *web.Comment) error {
+func (repo *CommentRepo) Create(ctx context.Context, comment *blog.Comment) error {
 	q := squirrel.Insert("comments").
 		Columns("id", "post_id", "user_id", "content", "created_at", "updated_at").
 		Values(comment.ID, comment.PostID, comment.UserID, comment.Content, comment.CreatedAt, comment.UpdatedAt)
@@ -29,8 +29,8 @@ func (repo *CommentRepo) Create(ctx context.Context, comment *web.Comment) error
 	return nil
 }
 
-func scanComment(rs squirrel.RowScanner) (*web.Comment, error) {
-	var comment web.Comment
+func scanComment(rs squirrel.RowScanner) (*blog.Comment, error) {
+	var comment blog.Comment
 
 	err := rs.Scan(
 		&comment.ID,
@@ -52,8 +52,8 @@ func scanComment(rs squirrel.RowScanner) (*web.Comment, error) {
 
 func (repo *CommentRepo) List(
 	ctx context.Context,
-	params web.ListCommentsParams,
-) ([]*web.Comment, error) {
+	params blog.ListCommentsParams,
+) ([]*blog.Comment, error) {
 	q := squirrel.Select(
 		"c.id",
 		"c.post_id",
@@ -84,7 +84,7 @@ func (repo *CommentRepo) List(
 		}
 	}()
 
-	var comments []*web.Comment
+	var comments []*blog.Comment
 
 	for rows.Next() {
 		comment, err := scanComment(rows)
@@ -103,7 +103,7 @@ func (repo *CommentRepo) List(
 	return comments, nil
 }
 
-func (repo *CommentRepo) GetByID(ctx context.Context, id string) (*web.Comment, error) {
+func (repo *CommentRepo) GetByID(ctx context.Context, id string) (*blog.Comment, error) {
 	q := squirrel.Select(
 		"c.id",
 		"c.post_id",
@@ -126,7 +126,7 @@ func (repo *CommentRepo) GetByID(ctx context.Context, id string) (*web.Comment, 
 	return comment, nil
 }
 
-func (repo *CommentRepo) Update(ctx context.Context, comment *web.Comment) error {
+func (repo *CommentRepo) Update(ctx context.Context, comment *blog.Comment) error {
 	q := squirrel.Update("comments").SetMap(map[string]any{
 		"post_id":    comment.PostID,
 		"user_id":    comment.UserID,
@@ -147,7 +147,7 @@ func (repo *CommentRepo) Update(ctx context.Context, comment *web.Comment) error
 	}
 
 	if rowsAffected == 0 {
-		return ErrNoRowsAffected
+		return blog.CommentByIDNotFoundError{ID: comment.ID}
 	}
 
 	return nil

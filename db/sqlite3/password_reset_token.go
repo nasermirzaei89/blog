@@ -7,15 +7,15 @@ import (
 	"fmt"
 
 	"github.com/Masterminds/squirrel"
-	"github.com/nasermirzaei89/fullstackgo/web"
+	"github.com/nasermirzaei89/fullstackgo/auth"
 )
 
 type PasswordResetTokenRepo struct {
 	DB *sql.DB
 }
 
-func scanPasswordResetToken(rs squirrel.RowScanner) (*web.PasswordResetToken, error) {
-	var token web.PasswordResetToken
+func scanPasswordResetToken(rs squirrel.RowScanner) (*auth.PasswordResetToken, error) {
+	var token auth.PasswordResetToken
 
 	err := rs.Scan(&token.ID, &token.UserID, &token.Token, &token.CreatedAt, &token.ExpiresAt)
 	if err != nil {
@@ -28,7 +28,7 @@ func scanPasswordResetToken(rs squirrel.RowScanner) (*web.PasswordResetToken, er
 func (repo *PasswordResetTokenRepo) GetByToken(
 	ctx context.Context,
 	tokenStr string,
-) (*web.PasswordResetToken, error) {
+) (*auth.PasswordResetToken, error) {
 	q := squirrel.Select("*").From("password_reset_tokens").Where(squirrel.Eq{"token": tokenStr})
 
 	q = q.RunWith(repo.DB)
@@ -36,7 +36,7 @@ func (repo *PasswordResetTokenRepo) GetByToken(
 	token, err := scanPasswordResetToken(q.QueryRowContext(ctx))
 	if err != nil {
 		if errors.Is(err, sql.ErrNoRows) {
-			return nil, web.PasswordResetTokenError{Token: tokenStr}
+			return nil, auth.PasswordResetTokenError{Token: tokenStr}
 		}
 
 		return nil, fmt.Errorf("error on scan password reset token: %w", err)
@@ -47,7 +47,7 @@ func (repo *PasswordResetTokenRepo) GetByToken(
 
 func (repo *PasswordResetTokenRepo) Create(
 	ctx context.Context,
-	token *web.PasswordResetToken,
+	token *auth.PasswordResetToken,
 ) error {
 	q := squirrel.Insert("password_reset_tokens").
 		Columns("id", "user_id", "token", "created_at", "expires_at").
