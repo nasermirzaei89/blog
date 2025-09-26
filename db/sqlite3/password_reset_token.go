@@ -1,43 +1,21 @@
-package blog
+package sqlite3
 
 import (
 	"context"
 	"database/sql"
 	"errors"
 	"fmt"
-	"time"
 
 	"github.com/Masterminds/squirrel"
+	"github.com/nasermirzaei89/blog/web"
 )
-
-type PasswordResetToken struct {
-	ID        string
-	UserID    string
-	Token     string
-	CreatedAt time.Time
-	ExpiresAt time.Time
-}
-
-type PasswordResetTokenRepository interface {
-	GetByToken(ctx context.Context, tokenStr string) (passwordResetToken *PasswordResetToken, err error)
-	Create(ctx context.Context, token *PasswordResetToken) (err error)
-	Delete(ctx context.Context, tokenID string) (err error)
-}
-
-type PasswordResetTokenError struct {
-	Token string
-}
-
-func (err PasswordResetTokenError) Error() string {
-	return fmt.Sprintf("password reset token '%s' not found", err.Token)
-}
 
 type PasswordResetTokenRepo struct {
 	DB *sql.DB
 }
 
-func scanPasswordResetToken(rs squirrel.RowScanner) (*PasswordResetToken, error) {
-	var token PasswordResetToken
+func scanPasswordResetToken(rs squirrel.RowScanner) (*web.PasswordResetToken, error) {
+	var token web.PasswordResetToken
 
 	err := rs.Scan(&token.ID, &token.UserID, &token.Token, &token.CreatedAt, &token.ExpiresAt)
 	if err != nil {
@@ -50,7 +28,7 @@ func scanPasswordResetToken(rs squirrel.RowScanner) (*PasswordResetToken, error)
 func (repo *PasswordResetTokenRepo) GetByToken(
 	ctx context.Context,
 	tokenStr string,
-) (*PasswordResetToken, error) {
+) (*web.PasswordResetToken, error) {
 	q := squirrel.Select("*").From("password_reset_tokens").Where(squirrel.Eq{"token": tokenStr})
 
 	q = q.RunWith(repo.DB)
@@ -58,7 +36,7 @@ func (repo *PasswordResetTokenRepo) GetByToken(
 	token, err := scanPasswordResetToken(q.QueryRowContext(ctx))
 	if err != nil {
 		if errors.Is(err, sql.ErrNoRows) {
-			return nil, PasswordResetTokenError{Token: tokenStr}
+			return nil, web.PasswordResetTokenError{Token: tokenStr}
 		}
 
 		return nil, fmt.Errorf("error on scan password reset token: %w", err)
@@ -69,7 +47,7 @@ func (repo *PasswordResetTokenRepo) GetByToken(
 
 func (repo *PasswordResetTokenRepo) Create(
 	ctx context.Context,
-	token *PasswordResetToken,
+	token *web.PasswordResetToken,
 ) error {
 	q := squirrel.Insert("password_reset_tokens").
 		Columns("id", "user_id", "token", "created_at", "expires_at").

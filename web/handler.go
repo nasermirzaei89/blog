@@ -1,7 +1,8 @@
-package blog
+package web
 
 import (
 	"context"
+	"embed"
 	"encoding/gob"
 	"errors"
 	"fmt"
@@ -26,12 +27,20 @@ import (
 	"golang.org/x/crypto/bcrypt"
 )
 
+var (
+	//go:embed templates/*
+	embeddedTemplatesFS embed.FS
+
+	//go:embed static/*
+	embeddedStaticFS embed.FS
+)
+
 type Handler struct {
 	handler                http.Handler
-	Static                 fs.FS
+	static                 fs.FS
 	CookieStore            *sessions.CookieStore
 	SessionName            string
-	Template               *template.Template
+	template               *template.Template
 	UserRepo               UserRepository
 	PostRepo               PostRepository
 	CommentRepo            CommentRepository
@@ -63,7 +72,7 @@ type Notification struct {
 }
 
 func init() {
-	// Register type for gob encoding
+	// Register type for gob encoding, which is used by gorilla/sessions.
 	gob.Register(Notification{})
 	gob.Register(map[string]any{})
 }
@@ -72,6 +81,12 @@ var _ http.Handler = (*Handler)(nil)
 
 func (h *Handler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 	if h.handler == nil {
+		h.static, _ = fs.Sub(embeddedStaticFS, "static")
+
+		h.template = template.Must(
+			template.New("").Funcs(Funcs).ParseFS(embeddedTemplatesFS, "templates/*.gohtml", "templates/icons/*.svg"),
+		)
+
 		mux := http.NewServeMux()
 
 		// Routes
@@ -117,10 +132,14 @@ func (h *Handler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 		// Auth middleware
 		authMW := h.AuthMiddleware()
 
-		h.handler = gzipMW(csrfMW(h.RecoverMW(authMW(mux))))
+		h.handler = gzipMW(csrfMW(h.RecoverMiddleware(authMW(mux))))
 	}
 
 	h.handler.ServeHTTP(w, r)
+}
+
+func (h *Handler) Shutdown() {
+	h.isShuttingDown.Store(true)
 }
 
 type SessionValueNotFoundError struct {
@@ -223,7 +242,7 @@ func (h *Handler) addSessionFlash(
 	return nil
 }
 
-func (h *Handler) RecoverMW(next http.Handler) http.Handler {
+func (h *Handler) RecoverMiddleware(next http.Handler) http.Handler {
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		defer func(ctx context.Context) {
 			if err := recover(); err != nil {
@@ -436,7 +455,7 @@ func (h *Handler) renderTemplate(
 
 	maps.Copy(data, extraData)
 
-	err := h.Template.ExecuteTemplate(w, name, data)
+	err := h.template.ExecuteTemplate(w, name, data)
 	if err != nil {
 		slog.ErrorContext(r.Context(), "failed to execute template", "error", err)
 		http.Error(w, "failed to execute template", http.StatusInternalServerError)
@@ -445,7 +464,7 @@ func (h *Handler) renderTemplate(
 
 func (h *Handler) HandleStatic(w http.ResponseWriter, r *http.Request) {
 	// w.Header().Set("Cache-Control", "public, max-age=3600")
-	http.FileServer(http.FS(h.Static)).ServeHTTP(w, r)
+	http.FileServer(http.FS(h.static)).ServeHTTP(w, r)
 }
 
 func (h *Handler) HandleIndex(w http.ResponseWriter, r *http.Request) {

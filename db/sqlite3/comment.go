@@ -1,44 +1,20 @@
-package blog
+package sqlite3
 
 import (
 	"context"
 	"database/sql"
 	"fmt"
 	"log/slog"
-	"time"
 
 	"github.com/Masterminds/squirrel"
+	"github.com/nasermirzaei89/blog/web"
 )
-
-type Comment struct {
-	ID            string
-	PostID        string
-	UserID        string
-	UserUsername  string
-	UserName      string
-	UserAvatarURL string
-	Content       string
-	CreatedAt     time.Time
-	UpdatedAt     time.Time
-}
-
-type ListCommentsParams struct {
-	PostID string
-}
-
-type CommentRepository interface {
-	Create(ctx context.Context, comment *Comment) (err error)
-	List(ctx context.Context, params ListCommentsParams) (comments []*Comment, err error)
-	GetByID(ctx context.Context, id string) (comment *Comment, err error)
-	Update(ctx context.Context, comment *Comment) (err error)
-	Delete(ctx context.Context, id string) (err error)
-}
 
 type CommentRepo struct {
 	DB *sql.DB
 }
 
-func (repo *CommentRepo) Create(ctx context.Context, comment *Comment) error {
+func (repo *CommentRepo) Create(ctx context.Context, comment *web.Comment) error {
 	q := squirrel.Insert("comments").
 		Columns("id", "post_id", "user_id", "content", "created_at", "updated_at").
 		Values(comment.ID, comment.PostID, comment.UserID, comment.Content, comment.CreatedAt, comment.UpdatedAt)
@@ -53,8 +29,8 @@ func (repo *CommentRepo) Create(ctx context.Context, comment *Comment) error {
 	return nil
 }
 
-func scanComment(rs squirrel.RowScanner) (*Comment, error) {
-	var comment Comment
+func scanComment(rs squirrel.RowScanner) (*web.Comment, error) {
+	var comment web.Comment
 
 	err := rs.Scan(
 		&comment.ID,
@@ -76,8 +52,8 @@ func scanComment(rs squirrel.RowScanner) (*Comment, error) {
 
 func (repo *CommentRepo) List(
 	ctx context.Context,
-	params ListCommentsParams,
-) ([]*Comment, error) {
+	params web.ListCommentsParams,
+) ([]*web.Comment, error) {
 	q := squirrel.Select(
 		"c.id",
 		"c.post_id",
@@ -108,7 +84,7 @@ func (repo *CommentRepo) List(
 		}
 	}()
 
-	var comments []*Comment
+	var comments []*web.Comment
 
 	for rows.Next() {
 		comment, err := scanComment(rows)
@@ -127,7 +103,7 @@ func (repo *CommentRepo) List(
 	return comments, nil
 }
 
-func (repo *CommentRepo) GetByID(ctx context.Context, id string) (*Comment, error) {
+func (repo *CommentRepo) GetByID(ctx context.Context, id string) (*web.Comment, error) {
 	q := squirrel.Select(
 		"c.id",
 		"c.post_id",
@@ -150,7 +126,7 @@ func (repo *CommentRepo) GetByID(ctx context.Context, id string) (*Comment, erro
 	return comment, nil
 }
 
-func (repo *CommentRepo) Update(ctx context.Context, comment *Comment) error {
+func (repo *CommentRepo) Update(ctx context.Context, comment *web.Comment) error {
 	q := squirrel.Update("comments").SetMap(map[string]any{
 		"post_id":    comment.PostID,
 		"user_id":    comment.UserID,

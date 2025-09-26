@@ -3,17 +3,15 @@ package blog_test
 import (
 	"context"
 	"database/sql"
-	"html/template"
-	"io/fs"
 	"net/http/httptest"
-	"os"
 	"strings"
 	"testing"
 
 	"github.com/gorilla/sessions"
 	"github.com/microcosm-cc/bluemonday"
-	"github.com/nasermirzaei89/blog"
+	"github.com/nasermirzaei89/blog/db/sqlite3"
 	"github.com/nasermirzaei89/blog/mailer"
+	"github.com/nasermirzaei89/blog/web"
 	"github.com/playwright-community/playwright-go"
 )
 
@@ -254,22 +252,8 @@ func runServer(t *testing.T) *httptest.Server {
 
 	ctx := context.Background()
 
-	fsys := os.DirFS(".")
-
-	static, err := fs.Sub(fsys, "static")
-	if err != nil {
-		t.Fatalf("could not get static files: %v", err)
-	}
-
 	cookieStore := sessions.NewCookieStore([]byte("test-session-key"))
 	sessionName := "test-blog"
-
-	tmpl, err := template.New("").
-		Funcs(blog.Funcs).
-		ParseFS(fsys, "templates/*.gohtml", "templates/icons/*.svg")
-	if err != nil {
-		t.Fatalf("could not parse templates: %v", err)
-	}
 
 	// Database
 	dbDSN := ":memory:"
@@ -283,24 +267,22 @@ func runServer(t *testing.T) *httptest.Server {
 	// err = errors.Join(err, db.Close())
 	// }()
 
-	err = blog.RunMigrations(ctx, db)
+	err = sqlite3.RunMigrations(ctx, db)
 	if err != nil {
 		t.Fatalf("could not run migrations: %v", err)
 	}
 
 	// Repositories
-	userRepo := &blog.UserRepo{DB: db}
-	postRepo := &blog.PostRepo{DB: db}
-	commentRepo := &blog.CommentRepo{DB: db}
-	passwordResetTokenRepo := &blog.PasswordResetTokenRepo{DB: db}
+	userRepo := &sqlite3.UserRepo{DB: db}
+	postRepo := &sqlite3.PostRepo{DB: db}
+	commentRepo := &sqlite3.CommentRepo{DB: db}
+	passwordResetTokenRepo := &sqlite3.PasswordResetTokenRepo{DB: db}
 
 	mockMailer := &mailer.MockMailer{}
 
-	handler := &blog.Handler{
-		Static:                 static,
+	handler := &web.Handler{
 		CookieStore:            cookieStore,
 		SessionName:            sessionName,
-		Template:               tmpl,
 		UserRepo:               userRepo,
 		PostRepo:               postRepo,
 		CommentRepo:            commentRepo,

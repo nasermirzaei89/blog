@@ -22,6 +22,10 @@ DOCKER_CMD?=docker
 help: ## Show help
 	@awk 'BEGIN {FS = ":.*?## "} /^[a-zA-Z_-]+:.*?## / {printf "\033[36m%-30s\033[0m %s\n", $$1, $$2}' $(MAKEFILE_LIST)
 
+.PHONY: dep
+dep: npm-install .which-go ## Install all dependencies
+	$(GO_CMD) mod download
+
 ### Go
 
 .which-go:
@@ -53,10 +57,14 @@ test: .which-go ## Run tests
 .which-npm:
 	@which $(NPM_CMD) > /dev/null || (echo "Install NodeJS from https://nodejs.org/en/download" & exit 1)
 
+.PHONY: npm-install
+npm-install: .which-npm ## Install JS dependencies
+	$(NPM_CMD) --prefix $(ROOT)/web install
+
 .PHONY: npm-build
 npm-build: .which-npm ## Build JS and CSS
-	$(NPM_CMD) run build:js
-	$(NPM_CMD) run build:css
+	$(NPM_CMD) --prefix $(ROOT)/web run build:js
+	$(NPM_CMD) --prefix $(ROOT)/web run build:css
 
 ### Docker
 

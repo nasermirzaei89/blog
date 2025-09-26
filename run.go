@@ -3,11 +3,8 @@ package blog
 import (
 	"context"
 	"database/sql"
-	"embed"
 	"errors"
 	"fmt"
-	"html/template"
-	"io/fs"
 	"log/slog"
 	"net/http"
 	"os"
@@ -18,19 +15,18 @@ import (
 	_ "github.com/joho/godotenv/autoload"
 	_ "github.com/mattn/go-sqlite3"
 	"github.com/microcosm-cc/bluemonday"
+	"github.com/nasermirzaei89/blog/db/sqlite3"
 	"github.com/nasermirzaei89/blog/mailer"
+	"github.com/nasermirzaei89/blog/web"
 	"github.com/nasermirzaei89/env"
 )
-
-//go:embed templates/* static/*
-var embeddedFS embed.FS
 
 const (
 	HTTPServerTimeOut = 60 * time.Second
 )
 
 func Run(ctx context.Context) error {
-	rootCtx, stop := signal.NotifyContext(ctx, os.Interrupt)
+	ctx, stop := signal.NotifyContext(ctx, os.Interrupt)
 	defer stop()
 
 	// Database
@@ -45,32 +41,18 @@ func Run(ctx context.Context) error {
 		err = errors.Join(err, db.Close())
 	}()
 
-	err = RunMigrations(rootCtx, db)
+	err = sqlite3.RunMigrations(ctx, db)
 	if err != nil {
 		return fmt.Errorf("error on run migrations: %w", err)
 	}
 
 	// Repositories
-	userRepo := &UserRepo{DB: db}
-	postRepo := &PostRepo{DB: db}
-	commentRepo := &CommentRepo{DB: db}
-	passwordResetTokenRepo := &PasswordResetTokenRepo{DB: db}
+	userRepo := &sqlite3.UserRepo{DB: db}
+	postRepo := &sqlite3.PostRepo{DB: db}
+	commentRepo := &sqlite3.CommentRepo{DB: db}
+	passwordResetTokenRepo := &sqlite3.PasswordResetTokenRepo{DB: db}
 
-	//
-	static, err := fs.Sub(embeddedFS, "static")
-	if err != nil {
-		return fmt.Errorf("failed to get static folder as sub: %w", err)
-	}
-
-	//
-	tmpl, err := template.New("").
-		Funcs(Funcs).
-		ParseFS(embeddedFS, "templates/*.gohtml", "templates/icons/*.svg")
-	if err != nil {
-		return fmt.Errorf("error on parse templates: %w", err)
-	}
-
-	//
+	// Session
 	cookieStore := sessions.NewCookieStore([]byte(env.MustGetString("SESSION_KEY")))
 	sessionName := env.GetString("SESSION_NAME", "blog")
 
@@ -87,11 +69,9 @@ func Run(ctx context.Context) error {
 	}
 
 	// HTTP Handler
-	handler := &Handler{
-		Static:                 static,
+	handler := &web.Handler{
 		CookieStore:            cookieStore,
 		SessionName:            sessionName,
-		Template:               tmpl,
 		UserRepo:               userRepo,
 		PostRepo:               postRepo,
 		CommentRepo:            commentRepo,
@@ -100,10 +80,7 @@ func Run(ctx context.Context) error {
 		HTMLPolicy:             bluemonday.UGCPolicy(),
 		TextPolicy:             bluemonday.StrictPolicy(),
 		CSRFAuthKeys:           []byte(env.MustGetString("CSRF_AUTH_KEY")),
-		CSRFTrustedOrigins: env.GetStringSlice(
-			"CSRF_TRUSTED_ORIGINS",
-			[]string{"localhost:8080"},
-		),
+		CSRFTrustedOrigins:     env.GetStringSlice("CSRF_TRUSTED_ORIGINS", []string{}),
 	}
 
 	// HTTP Server
@@ -123,7 +100,7 @@ func Run(ctx context.Context) error {
 	serverErr := make(chan error, 1)
 
 	go func() {
-		slog.InfoContext(rootCtx, "starting server", "address", address)
+		slog.InfoContext(ctx, "starting server", "address", address)
 
 		serverErr <- server.ListenAndServe()
 	}()
@@ -132,15 +109,15 @@ func Run(ctx context.Context) error {
 	select {
 	case err = <-serverErr:
 		return err
-	case <-rootCtx.Done():
+	case <-ctx.Done():
 		slog.Info("interrupt signal received")
 		slog.Info("shutting down server gracefully...")
-		handler.isShuttingDown.Store(true)
+		handler.Shutdown()
 
-		shutdownCtx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+		ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
 		defer cancel()
 
-		err = server.Shutdown(shutdownCtx) //nolint:contextcheck
+		err = server.Shutdown(ctx) //nolint:contextcheck
 		if err != nil {
 			return fmt.Errorf("error shutting down server: %w", err)
 		}

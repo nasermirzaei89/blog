@@ -1,6 +1,7 @@
-bin/
+bin/*
 tmp/
-node_modules/
 
 .env
 blog.db
+
+coverage.out

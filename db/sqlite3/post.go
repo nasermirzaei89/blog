@@ -1,47 +1,20 @@
-package blog
+package sqlite3
 
 import (
 	"context"
 	"database/sql"
 	"fmt"
 	"log/slog"
-	"time"
 
 	"github.com/Masterminds/squirrel"
+	"github.com/nasermirzaei89/blog/web"
 )
-
-type Post struct {
-	ID        string
-	Title     string
-	Slug      string
-	Excerpt   string
-	Content   string
-	AuthorID  string
-	CreatedAt time.Time
-	UpdatedAt time.Time
-}
-
-type ListPostsParams struct {
-	Limit  int
-	Offset int
-}
-
-type PostRepository interface {
-	List(ctx context.Context, params ListPostsParams) (posts []*Post, err error)
-	Count(ctx context.Context) (count int, err error)
-	GetBySlug(ctx context.Context, slug string) (post *Post, err error)
-	GetByID(ctx context.Context, id string) (post *Post, err error)
-	SlugExists(ctx context.Context, slug string) (exists bool, err error)
-	Create(ctx context.Context, post *Post) (err error)
-	Update(ctx context.Context, post *Post) (err error)
-	Delete(ctx context.Context, id string) (err error)
-}
 
 type PostRepo struct {
 	DB *sql.DB
 }
 
-func (repo *PostRepo) List(ctx context.Context, params ListPostsParams) ([]*Post, error) {
+func (repo *PostRepo) List(ctx context.Context, params web.ListPostsParams) ([]*web.Post, error) {
 	q := squirrel.Select("*").From("posts").OrderBy("created_at DESC")
 
 	if params.Limit > 0 {
@@ -66,7 +39,7 @@ func (repo *PostRepo) List(ctx context.Context, params ListPostsParams) ([]*Post
 		}
 	}()
 
-	var posts []*Post
+	var posts []*web.Post
 
 	for rows.Next() {
 		post, err := scanPost(rows)
@@ -99,7 +72,7 @@ func (repo *PostRepo) Count(ctx context.Context) (int, error) {
 	return count, nil
 }
 
-func (repo *PostRepo) GetBySlug(ctx context.Context, slug string) (*Post, error) {
+func (repo *PostRepo) GetBySlug(ctx context.Context, slug string) (*web.Post, error) {
 	q := squirrel.Select("*").From("posts").Where(squirrel.Eq{"slug": slug})
 
 	q = q.RunWith(repo.DB)
@@ -112,7 +85,7 @@ func (repo *PostRepo) GetBySlug(ctx context.Context, slug string) (*Post, error)
 	return post, nil
 }
 
-func (repo *PostRepo) GetByID(ctx context.Context, id string) (*Post, error) {
+func (repo *PostRepo) GetByID(ctx context.Context, id string) (*web.Post, error) {
 	q := squirrel.Select("*").From("posts").Where(squirrel.Eq{"id": id})
 
 	q = q.RunWith(repo.DB)
@@ -140,8 +113,8 @@ func (repo *PostRepo) SlugExists(ctx context.Context, slug string) (bool, error)
 	return count > 0, nil
 }
 
-func scanPost(rs squirrel.RowScanner) (*Post, error) {
-	var post Post
+func scanPost(rs squirrel.RowScanner) (*web.Post, error) {
+	var post web.Post
 
 	err := rs.Scan(
 		&post.ID,
@@ -160,7 +133,7 @@ func scanPost(rs squirrel.RowScanner) (*Post, error) {
 	return &post, nil
 }
 
-func (repo *PostRepo) Create(ctx context.Context, post *Post) error {
+func (repo *PostRepo) Create(ctx context.Context, post *web.Post) error {
 	q := squirrel.Insert("posts").
 		Columns("id", "title", "slug", "excerpt", "content", "author_id", "created_at", "updated_at").
 		Values(post.ID, post.Title, post.Slug, post.Excerpt, post.Content, post.AuthorID, post.CreatedAt, post.UpdatedAt)
@@ -184,7 +157,7 @@ func (repo *PostRepo) Create(ctx context.Context, post *Post) error {
 	return nil
 }
 
-func (repo *PostRepo) Update(ctx context.Context, post *Post) error {
+func (repo *PostRepo) Update(ctx context.Context, post *web.Post) error {
 	q := squirrel.Update("posts").
 		Set("title", post.Title).
 		Set("slug", post.Slug).

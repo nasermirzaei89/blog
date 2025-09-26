@@ -3,19 +3,17 @@
 ## Run
 
 Copy `.env.example` to `.env` and update it.
-Then:
+
+For the first time run:
+
+```shell
+make dep
+```
+
+To run application:
 
 ```shell
 make run
-```
-
-or
-
-```shell
-npm install
-make npm-build
-make build
-./bin/blog
 ```
 
 For using forgot-password you need to run:
@@ -30,4 +28,4 @@ docker run --name=mailpit -p 8025:8025 -p 1025:1025 axllent/mailpit
 make test
 ```
 
-to debug playwright tests set `export PWDEBUG=1`
+to debug playwright tests set `PWDEBUG=1`

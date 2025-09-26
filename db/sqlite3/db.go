@@ -1,4 +1,4 @@
-package blog
+package sqlite3
 
 import (
 	"context"

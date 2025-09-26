@@ -1,4 +1,4 @@
-package blog
+package web
 
 import (
 	"cmp"
